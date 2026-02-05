@@ -27,3 +27,5 @@ uploads/
 
 # npm
 npm-debug.log*
+
+/src/generated/prisma
