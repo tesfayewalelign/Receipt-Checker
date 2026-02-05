@@ -2,13 +2,12 @@
   "name": "receipt-checker-backend",
   "version": "1.0.0",
   "description": "Backend API for Ethiopian bank receipt verification system",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-  "dev": "ts-node-dev --respawn src/server.ts",
-  "build": "tsc",
-  "start": "node dist/server.js"
-},
-
+    "dev": "ts-node-dev --respawn src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
   "keywords": [],
   "author": "Tesfaye Walelign",
   "license": "ISC",
@@ -21,6 +20,7 @@
     "multer": "^2.0.2"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.2.0",
     "ts-node-dev": "^2.0.0",
