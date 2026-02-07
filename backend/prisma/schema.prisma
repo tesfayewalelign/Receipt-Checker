@@ -5,42 +5,36 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-
 }
 
-
 model Bank {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  code      String    @unique
-  createdAt DateTime  @default(now())
-
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  code          String         @unique
+  createdAt     DateTime       @default(now())
   verifications Verification[]
 }
 
 model Verification {
-  id               Int       @id @default(autoincrement())
-  bankId           Int
-  reference        String
-  amount           Float?
-  status           String    @default("pending")
-  transactionDate  DateTime?
-  provider         String
-  rawData          Json?    // store full bank-specific result here
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  bank Bank @relation(fields: [bankId], references: [id])
-  uploadedFiles  UploadedFile[]
+  id              Int            @id @default(autoincrement())
+  bankId          Int
+  reference       String
+  amount          Float?
+  status          String         @default("pending")
+  transactionDate DateTime?
+  provider        String
+  rawData         Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  uploadedFiles   UploadedFile[]
+  bank            Bank           @relation(fields: [bankId], references: [id])
 }
 
-
 model UploadedFile {
-  id              Int      @id @default(autoincrement())
-  verificationId  Int
-  filePath        String
-  fileType        String
-  uploadedAt      DateTime @default(now())
-
-  verification Verification @relation(fields: [verificationId], references: [id])
+  id             Int          @id @default(autoincrement())
+  verificationId Int
+  filePath       String
+  fileType       String
+  uploadedAt     DateTime     @default(now())
+  verification   Verification @relation(fields: [verificationId], references: [id])
 }
