@@ -1,20 +1,15 @@
-import { PrismaClient } from "../src/generated/prisma";
-
-const prisma = new PrismaClient();
+import prisma from "../src/config/database";
 
 async function main() {
-  await prisma.bank.upsert({
-    where: { code: "CBE" },
-    update: {},
-    create: {
-      name: "Commercial Bank of Ethiopia",
-      code: "CBE",
-    },
+  await prisma.bank.createMany({
+    data: [
+      { name: "Commercial Bank of Ethiopia", code: "CBE" },
+      { name: "TeleBirr", code: "TELEBIRR" },
+    ],
+    skipDuplicates: true,
   });
-
-  console.log("✅ Seeded CBE bank");
 }
 
 main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+  .catch((e) => console.error(e))
+  .finally(async () => await prisma.$disconnect());
