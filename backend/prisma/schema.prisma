@@ -1,13 +1,13 @@
 generator client {
   provider = "prisma-client-js"
-  engineType = "binary"
   output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
- 
+
 }
+
 
 model Bank {
   id        Int       @id @default(autoincrement())
@@ -23,21 +23,17 @@ model Verification {
   bankId           Int
   reference        String
   amount           Float?
-  status           String    @default("pending") // pending, success, failed
+  status           String    @default("pending")
   transactionDate  DateTime?
-  provider         String    // bank code: CBE, TELEBIRR, AWASH
-  payerName        String?   // from PDF
-  payerAccount     String?   // masked
-  receiverName     String?   // from PDF
-  receiverAccount  String?   // masked
-  reason           String?   // optional note
-  rawData          Json?     // store original parsed data for auditing/debugging
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  provider         String
+  rawData          Json?    // store full bank-specific result here
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   bank Bank @relation(fields: [bankId], references: [id])
   uploadedFiles  UploadedFile[]
 }
+
 
 model UploadedFile {
   id              Int      @id @default(autoincrement())
