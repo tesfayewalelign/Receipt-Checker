@@ -2,6 +2,10 @@ import prisma from "../../config/database";
 import { verifyCBE, VerifyResult } from "../../verifiers/cbe.verifier";
 import logger from "../../utils/logger";
 
+const toNullable = <T>(value: T | undefined | null): T | null => {
+  return value !== undefined ? value : null;
+};
+
 export class VerificationService {
   static async verifyCBEReceipt(reference: string, accountSuffix: string) {
     const cbeBank = await prisma.bank.findUnique({ where: { code: "CBE" } });
@@ -15,17 +19,17 @@ export class VerificationService {
         reference,
         provider: "CBE",
         status: result.success ? "success" : "failed",
-        payerName: result.payer,
-        payerAccount: result.payerAccount,
-        receiverName: result.receiver,
-        receiverAccount: result.receiverAccount,
-        amount: result.amount,
-        transactionDate: result.date,
-        rawData: result,
+        payerName: toNullable(result.payer),
+        payerAccount: toNullable(result.payerAccount),
+        receiverName: toNullable(result.receiver),
+        receiverAccount: toNullable(result.receiverAccount),
+        amount: toNullable(result.amount),
+        transactionDate: toNullable(result.date ? new Date(result.date) : null),
+        rawData: { ...result },
       },
     });
 
-    logger.info("Verification saved:", verification.id);
+    logger.info(`Verification saved: ${verification.id}`);
     return verification;
   }
 }
