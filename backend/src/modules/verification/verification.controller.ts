@@ -2,11 +2,14 @@ import { Request, Response } from "express";
 import { VerificationService } from "./verification.service";
 import { handleResponse } from "../../utils/response";
 import { BankType } from "../../verifiers/bank.verifier";
-import { Multer } from "multer";
+
+type MulterRequest = Request & {
+  file?: Express.Multer.File;
+};
 
 export class VerificationController {
   static async verify(req: Request, res: Response) {
-    const file = (req as Request & { file?: Multer.File }).file;
+    const file = (req as MulterRequest).file;
 
     const { bank, reference, accountSuffix } = req.body;
 
