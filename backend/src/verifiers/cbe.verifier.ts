@@ -3,12 +3,6 @@ import axios from "axios";
 import https from "https";
 import pdfParse from "pdf-parse";
 
-export enum BankType {
-  CBE = "CBE",
-  TELEBIRR = "TELEBIRR",
-  DASHEN = "DASHEN",
-}
-
 export interface VerifyResult {
   success: boolean;
   data?: {
@@ -27,38 +21,41 @@ export interface VerifyResult {
 const titleCase = (str: string) =>
   str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
-export async function verifyByBank(
-  bank: BankType,
-  reference: string,
-  accountSuffix: string,
-): Promise<VerifyResult> {
-  switch (bank) {
-    case BankType.CBE:
-      return await verifyCBE(reference, accountSuffix);
-    case BankType.TELEBIRR:
-      return {
-        success: false,
-        error: "TeleBirr verification not implemented yet",
-      };
-    case BankType.DASHEN:
-      return {
-        success: false,
-        error: "Dashen verification not implemented yet",
-      };
-    default:
-      return { success: false, error: "Unsupported bank" };
+export async function verifyCBE(payload: {
+  pdfBuffer?: Buffer;
+  reference?: string;
+  accountSuffix?: string;
+}): Promise<VerifyResult> {
+  try {
+    let pdfBuffer: Buffer | null = null;
+
+    if (payload.pdfBuffer) {
+      pdfBuffer = payload.pdfBuffer;
+    } else if (payload.reference && payload.accountSuffix) {
+      pdfBuffer = await fetchCBEReceiptPdf(
+        payload.reference,
+        payload.accountSuffix,
+      );
+    } else {
+      return { success: false, error: "No PDF or reference provided" };
+    }
+
+    return parseCBEReceipt(pdfBuffer);
+  } catch (err: any) {
+    return { success: false, error: err.message || "CBE verification failed" };
   }
 }
 
-export async function verifyCBE(
+async function fetchCBEReceiptPdf(
   reference: string,
-  accountSuffix: string,
-): Promise<VerifyResult> {
-  const fullId = `${reference}${accountSuffix}`;
+  suffix: string,
+): Promise<Buffer> {
+  const fullId = `${reference}${suffix}`;
   const url = `https://apps.cbe.com.et:100/?id=${fullId}`;
   const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
   let browser: Browser | null = null;
+
   try {
     browser = await puppeteer.launch({
       headless: true,
@@ -68,93 +65,89 @@ export async function verifyCBE(
         "--ignore-certificate-errors",
       ],
     });
-    const page = await browser.newPage();
 
+    const page = await browser.newPage();
     let detectedPdfUrl: string | null = null;
+
     page.on("response", (response) => {
       const contentType = response.headers()["content-type"];
       if (contentType?.includes("pdf")) detectedPdfUrl = response.url();
     });
 
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await (page as any).waitForTimeout(3000); // wait for PDF to load
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
 
-    if (!detectedPdfUrl) {
-      return {
-        success: false,
-        error: "Receipt PDF not found (invalid reference)",
-      };
-    }
+    await new Promise((r) => setTimeout(r, 3000));
+
+    if (!detectedPdfUrl)
+      throw new Error("Receipt PDF not found (invalid reference)");
 
     const pdfResponse = await axios.get(detectedPdfUrl, {
       responseType: "arraybuffer",
       httpsAgent,
     });
 
-    return parseCBEReceipt(Buffer.from(pdfResponse.data));
-  } catch (err: any) {
-    return { success: false, error: err.message || "CBE verification failed" };
+    return Buffer.from(pdfResponse.data);
   } finally {
     if (browser) await browser.close();
   }
 }
 
-async function parseCBEReceipt(buffer: Buffer): Promise<VerifyResult> {
+function parseCBEReceipt(buffer: Buffer): VerifyResult {
   try {
     const pdfParse = require("pdf-parse");
-    const parsed = await pdfParse(buffer);
-    const text = parsed.text.replace(/\s+/g, " ").trim();
+    const parsed = pdfParse(buffer);
+    return parsed.then((pdf: any) => {
+      const text = pdf.text.replace(/\s+/g, " ").trim();
 
-    const payer = text.match(/Payer\s*:?\s*(.*?)\s+Account/i)?.[1];
-    const receiver = text.match(/Receiver\s*:?\s*(.*?)\s+Account/i)?.[1];
+      const payer = text.match(/Payer\s*:?\s*(.*?)\s+Account/i)?.[1];
+      const receiver = text.match(/Receiver\s*:?\s*(.*?)\s+Account/i)?.[1];
+      const accounts = [
+        ...text.matchAll(/Account\s*:?\s*([A-Z0-9]?\*{4}\d{4})/gi),
+      ];
+      const payerAccount = accounts?.[0]?.[1];
+      const receiverAccount = accounts?.[1]?.[1];
+      const amountText = text.match(
+        /Transferred Amount\s*:?\s*([\d,]+\.\d{2})\s*ETB/i,
+      )?.[1];
+      const reference = text.match(
+        /Reference No\.?\s*\(VAT Invoice No\)\s*:?\s*([A-Z0-9]+)/i,
+      )?.[1];
+      const dateText = text.match(
+        /Payment Date & Time\s*:?\s*([\d\/,: ]+[APM]{2})/i,
+      )?.[1];
+      const reason = text.match(
+        /Reason\s*\/\s*Type of service\s*:?\s*(.*?)\s+Transferred Amount/i,
+      )?.[1];
 
-    const accounts = [
-      ...text.matchAll(/Account\s*:?\s*([A-Z0-9]?\*{4}\d{4})/gi),
-    ];
-    const payerAccount = accounts?.[0]?.[1];
-    const receiverAccount = accounts?.[1]?.[1];
+      if (
+        !payer ||
+        !receiver ||
+        !payerAccount ||
+        !receiverAccount ||
+        !amountText ||
+        !reference ||
+        !dateText
+      ) {
+        return {
+          success: false,
+          error: "Failed to extract required fields from CBE receipt",
+        };
+      }
 
-    const amountText = text.match(
-      /Transferred Amount\s*:?\s*([\d,]+\.\d{2})\s*ETB/i,
-    )?.[1];
-    const reference = text.match(
-      /Reference No\.?\s*\(VAT Invoice No\)\s*:?\s*([A-Z0-9]+)/i,
-    )?.[1];
-    const dateText = text.match(
-      /Payment Date & Time\s*:?\s*([\d\/,: ]+[APM]{2})/i,
-    )?.[1];
-    const reason = text.match(
-      /Reason\s*\/\s*Type of service\s*:?\s*(.*?)\s+Transferred Amount/i,
-    )?.[1];
-
-    if (
-      !payer ||
-      !receiver ||
-      !payerAccount ||
-      !receiverAccount ||
-      !amountText ||
-      !reference ||
-      !dateText
-    ) {
       return {
-        success: false,
-        error: "Failed to extract required fields from CBE receipt",
+        success: true,
+        data: {
+          payer: titleCase(payer),
+          payerAccount,
+          receiver: titleCase(receiver),
+          receiverAccount,
+          amount: parseFloat(amountText.replace(/,/g, "")),
+          date: new Date(dateText),
+          reference,
+          reason: reason || null,
+        },
       };
-    }
-
-    return {
-      success: true,
-      data: {
-        payer: titleCase(payer),
-        payerAccount,
-        receiver: titleCase(receiver),
-        receiverAccount,
-        amount: parseFloat(amountText.replace(/,/g, "")),
-        date: new Date(dateText),
-        reference,
-        reason: reason || null,
-      },
-    };
+    });
   } catch {
     return { success: false, error: "PDF parsing failed" };
   }

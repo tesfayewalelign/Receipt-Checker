@@ -2,43 +2,55 @@ import { Request, Response } from "express";
 import { VerificationService } from "./verification.service";
 import { handleResponse } from "../../utils/response";
 import { BankType } from "../../verifiers/bank.verifier";
+import { Multer } from "multer";
 
 export class VerificationController {
   static async verify(req: Request, res: Response) {
+    const file = (req as Request & { file?: Multer.File }).file;
+
     const { bank, reference, accountSuffix } = req.body;
 
-    if (!bank || !reference || !accountSuffix) {
-      return handleResponse(
-        res,
-        null,
-        "Bank, reference, and account suffix are required",
-        false,
-      );
+    if (!bank) {
+      return handleResponse(res, null, "Bank is required", false);
     }
 
     if (!Object.values(BankType).includes(bank)) {
       return handleResponse(res, null, `Bank ${bank} is not supported`, false);
     }
 
+    if (!file && (!reference || !accountSuffix)) {
+      return handleResponse(
+        res,
+        null,
+        "Provide PDF file or reference with account suffix",
+        false,
+      );
+    }
+
     try {
-      const verification = await VerificationService.verifyReceipt(
-        bank,
+      const result = await VerificationService.verifyReceipt(bank, {
+        pdfBuffer: file?.buffer,
         reference,
         accountSuffix,
-      );
+      });
 
-      if (!verification.success) {
-        return handleResponse(res, verification, verification.error, false);
+      if (!result.success) {
+        return handleResponse(res, result, result.error, false);
       }
 
       return handleResponse(
         res,
-        verification.data,
+        result.data,
         "Verification completed successfully",
         true,
       );
     } catch (err: any) {
-      return handleResponse(res, null, err.message, false);
+      return handleResponse(
+        res,
+        null,
+        err.message || "Verification failed",
+        false,
+      );
     }
   }
 }

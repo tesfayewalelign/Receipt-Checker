@@ -1,24 +1,37 @@
-import { VerifyResult } from "../../verifiers/cbe.verifier";
-import { verifyCBE } from "../../verifiers/cbe.verifier";
-import { BankType } from "../../verifiers/bank.verifier";
 import logger from "../../utils/logger";
+import { BankType, verifyByBank } from "../../verifiers/bank.verifier";
+import { VerifyResult } from "../../verifiers/cbe.verifier";
+
+export interface VerifyPayload {
+  pdfBuffer?: Buffer;
+  reference?: string;
+  accountSuffix?: string;
+}
 
 export class VerificationService {
   static async verifyReceipt(
     bank: BankType,
-    reference: string,
-    accountSuffix: string,
+    payload: VerifyPayload,
   ): Promise<VerifyResult> {
-    logger.info(
-      `Starting verification for bank: ${bank}, reference: ${reference}`,
-    );
+    logger.info(`Starting verification for bank: ${bank}`);
 
-    switch (bank) {
-      case BankType.CBE:
-        return await verifyCBE(reference, accountSuffix);
+    if (!payload.pdfBuffer && (!payload.reference || !payload.accountSuffix)) {
+      logger.warn("No PDF or reference/suffix provided");
+      return {
+        success: false,
+        error: "Provide PDF file or reference with account suffix",
+      };
+    }
 
-      default:
-        return { success: false, error: `Bank ${bank} not supported yet` };
+    try {
+      const result = await verifyByBank(bank, payload);
+      logger.info(
+        `Verification result for bank ${bank}: ${result.success ? "SUCCESS" : "FAILED"}`,
+      );
+      return result;
+    } catch (err: any) {
+      logger.error(`Verification failed for bank ${bank}: ${err.message}`);
+      return { success: false, error: err.message || "Verification failed" };
     }
   }
 }
