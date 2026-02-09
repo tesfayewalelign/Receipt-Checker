@@ -10,7 +10,6 @@ const pool = new Pool({
 });
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg(pool),
   log: ["query", "info", "warn", "error"],
 });
 

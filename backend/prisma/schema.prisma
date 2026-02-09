@@ -4,37 +4,23 @@ generator client {
 }
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 
-model Bank {
-  id            Int            @id @default(autoincrement())
-  name          String         @unique
-  code          String         @unique
-  createdAt     DateTime       @default(now())
-  verifications Verification[]
+
+enum Bank {
+  CBE
+  TELEBIRR
+  DASHEN
+}
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model Verification {
-  id              Int            @id @default(autoincrement())
-  bankId          Int
-  reference       String
-  amount          Float?
-  status          String         @default("pending")
-  transactionDate DateTime?
-  provider        String
-  rawData         Json?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  uploadedFiles   UploadedFile[]
-  bank            Bank           @relation(fields: [bankId], references: [id])
-}
 
-model UploadedFile {
-  id             Int          @id @default(autoincrement())
-  verificationId Int
-  filePath       String
-  fileType       String
-  uploadedAt     DateTime     @default(now())
-  verification   Verification @relation(fields: [verificationId], references: [id])
-}
