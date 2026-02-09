@@ -1,26 +1,53 @@
-import puppeteer, { Browser, LaunchOptions, Page } from "puppeteer";
-
-import axios, { AxiosResponse } from "axios";
-import * as pdfParse from "pdf-parse";
-
+import puppeteer, { Browser } from "puppeteer";
+import axios from "axios";
 import https from "https";
-import logger from "../utils/logger";
+import pdfParse from "pdf-parse";
+
+export enum BankType {
+  CBE = "CBE",
+  TELEBIRR = "TELEBIRR",
+  DASHEN = "DASHEN",
+}
 
 export interface VerifyResult {
   success: boolean;
-  payer?: string;
-  payerAccount?: string;
-  receiver?: string;
-  receiverAccount?: string;
-  amount?: number;
-  date?: Date;
-  reference?: string;
-  reason?: string | null;
+  data?: {
+    payer: string;
+    payerAccount: string;
+    receiver: string;
+    receiverAccount: string;
+    amount: number;
+    date: Date;
+    reference: string;
+    reason?: string | null;
+  };
   error?: string;
 }
 
-function titleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+const titleCase = (str: string) =>
+  str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+export async function verifyByBank(
+  bank: BankType,
+  reference: string,
+  accountSuffix: string,
+): Promise<VerifyResult> {
+  switch (bank) {
+    case BankType.CBE:
+      return await verifyCBE(reference, accountSuffix);
+    case BankType.TELEBIRR:
+      return {
+        success: false,
+        error: "TeleBirr verification not implemented yet",
+      };
+    case BankType.DASHEN:
+      return {
+        success: false,
+        error: "Dashen verification not implemented yet",
+      };
+    default:
+      return { success: false, error: "Unsupported bank" };
+  }
 }
 
 export async function verifyCBE(
@@ -33,119 +60,102 @@ export async function verifyCBE(
 
   let browser: Browser | null = null;
   try {
-    const launchOptions: LaunchOptions = {
+    browser = await puppeteer.launch({
       headless: true,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--ignore-certificate-errors",
       ],
-      ...(process.env.PUPPETEER_EXECUTABLE_PATH
-        ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
-        : {}),
-    };
-
-    browser = await puppeteer.launch(launchOptions);
+    });
     const page = await browser.newPage();
-    let detectedPdfUrl: string | null = null;
 
-    page.on("response", async (response) => {
+    let detectedPdfUrl: string | null = null;
+    page.on("response", (response) => {
       const contentType = response.headers()["content-type"];
       if (contentType?.includes("pdf")) detectedPdfUrl = response.url();
     });
 
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await new Promise((res) => setTimeout(res, 3000));
+    await (page as any).waitForTimeout(3000); // wait for PDF to load
 
-    if (!detectedPdfUrl)
-      return { success: false, error: "No PDF detected via Puppeteer." };
+    if (!detectedPdfUrl) {
+      return {
+        success: false,
+        error: "Receipt PDF not found (invalid reference)",
+      };
+    }
 
-    const pdfRes = await axios.get(detectedPdfUrl, {
-      httpsAgent,
+    const pdfResponse = await axios.get(detectedPdfUrl, {
       responseType: "arraybuffer",
+      httpsAgent,
     });
 
-    return await parseCBEReceipt(pdfRes.data);
-  } catch (puppetErr: any) {
-    logger.error("❌ Puppeteer failed:", puppetErr.message);
-
+    return parseCBEReceipt(Buffer.from(pdfResponse.data));
+  } catch (err: any) {
+    return { success: false, error: err.message || "CBE verification failed" };
+  } finally {
     if (browser) await browser.close();
-
-    return {
-      success: false,
-      error: `Both direct and Puppeteer failed: ${puppetErr.message}`,
-    };
   }
 }
 
-async function parseCBEReceipt(buffer: ArrayBuffer): Promise<VerifyResult> {
+async function parseCBEReceipt(buffer: Buffer): Promise<VerifyResult> {
   try {
     const pdfParse = require("pdf-parse");
-    const parsed = await pdfParse(Buffer.from(buffer));
+    const parsed = await pdfParse(buffer);
+    const text = parsed.text.replace(/\s+/g, " ").trim();
 
-    const rawText = parsed.text.replace(/\s+/g, " ").trim();
+    const payer = text.match(/Payer\s*:?\s*(.*?)\s+Account/i)?.[1];
+    const receiver = text.match(/Receiver\s*:?\s*(.*?)\s+Account/i)?.[1];
 
-    let payerName = rawText.match(/Payer\s*:?\s*(.*?)\s+Account/i)?.[1]?.trim();
-    let receiverName = rawText
-      .match(/Receiver\s*:?\s*(.*?)\s+Account/i)?.[1]
-      ?.trim();
-    const accountMatches = [
-      ...rawText.matchAll(/Account\s*:?\s*([A-Z0-9]?\*{4}\d{4})/gi),
+    const accounts = [
+      ...text.matchAll(/Account\s*:?\s*([A-Z0-9]?\*{4}\d{4})/gi),
     ];
-    const payerAccount = accountMatches?.[0]?.[1];
-    const receiverAccount = accountMatches?.[1]?.[1];
+    const payerAccount = accounts?.[0]?.[1];
+    const receiverAccount = accounts?.[1]?.[1];
 
-    const reason = rawText
-      .match(
-        /Reason\s*\/\s*Type of service\s*:?\s*(.*?)\s+Transferred Amount/i,
-      )?.[1]
-      ?.trim();
-    const amountText = rawText.match(
+    const amountText = text.match(
       /Transferred Amount\s*:?\s*([\d,]+\.\d{2})\s*ETB/i,
     )?.[1];
-    const referenceMatch = rawText
-      .match(/Reference No\.?\s*\(VAT Invoice No\)\s*:?\s*([A-Z0-9]+)/i)?.[1]
-      ?.trim();
-    const dateRaw = rawText
-      .match(/Payment Date & Time\s*:?\s*([\d\/,: ]+[APM]{2})/i)?.[1]
-      ?.trim();
-
-    const amount = amountText
-      ? parseFloat(amountText.replace(/,/g, ""))
-      : undefined;
-    const date = dateRaw ? new Date(dateRaw) : undefined;
-
-    payerName = payerName ? titleCase(payerName) : undefined;
-    receiverName = receiverName ? titleCase(receiverName) : undefined;
+    const reference = text.match(
+      /Reference No\.?\s*\(VAT Invoice No\)\s*:?\s*([A-Z0-9]+)/i,
+    )?.[1];
+    const dateText = text.match(
+      /Payment Date & Time\s*:?\s*([\d\/,: ]+[APM]{2})/i,
+    )?.[1];
+    const reason = text.match(
+      /Reason\s*\/\s*Type of service\s*:?\s*(.*?)\s+Transferred Amount/i,
+    )?.[1];
 
     if (
-      payerName &&
-      payerAccount &&
-      receiverName &&
-      receiverAccount &&
-      amount &&
-      date &&
-      referenceMatch
+      !payer ||
+      !receiver ||
+      !payerAccount ||
+      !receiverAccount ||
+      !amountText ||
+      !reference ||
+      !dateText
     ) {
       return {
-        success: true,
-        payer: payerName,
-        payerAccount,
-        receiver: receiverName,
-        receiverAccount,
-        amount,
-        date,
-        reference: referenceMatch,
-        reason: reason || null,
-      };
-    } else {
-      return {
         success: false,
-        error: "Could not extract all required fields from PDF.",
+        error: "Failed to extract required fields from CBE receipt",
       };
     }
-  } catch (parseErr: any) {
-    logger.error("❌ PDF parsing failed:", parseErr.message);
-    return { success: false, error: "Error parsing PDF data" };
+
+    return {
+      success: true,
+      data: {
+        payer: titleCase(payer),
+        payerAccount,
+        receiver: titleCase(receiver),
+        receiverAccount,
+        amount: parseFloat(amountText.replace(/,/g, "")),
+        date: new Date(dateText),
+        reference,
+        reason: reason || null,
+      },
+    };
+  } catch {
+    return { success: false, error: "PDF parsing failed" };
   }
 }

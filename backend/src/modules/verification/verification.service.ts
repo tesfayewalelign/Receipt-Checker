@@ -1,31 +1,24 @@
-import prisma from "../../config/database";
-import { verifyCBE, VerifyResult } from "../../verifiers/cbe.verifier";
+import { VerifyResult } from "../../verifiers/cbe.verifier";
+import { verifyCBE } from "../../verifiers/cbe.verifier";
+import { BankType } from "../../verifiers/bank.verifier";
 import logger from "../../utils/logger";
 
-const toNullable = <T>(value: T | undefined | null): T | null => {
-  return value !== undefined ? value : null;
-};
-
 export class VerificationService {
-  static async verifyCBEReceipt(reference: string, accountSuffix: string) {
-    const cbeBank = await prisma.bank.findUnique({ where: { code: "CBE" } });
-    if (!cbeBank) throw new Error("CBE Bank not found in DB");
+  static async verifyReceipt(
+    bank: BankType,
+    reference: string,
+    accountSuffix: string,
+  ): Promise<VerifyResult> {
+    logger.info(
+      `Starting verification for bank: ${bank}, reference: ${reference}`,
+    );
 
-    const result: VerifyResult = await verifyCBE(reference, accountSuffix);
+    switch (bank) {
+      case BankType.CBE:
+        return await verifyCBE(reference, accountSuffix);
 
-    const verification = await prisma.verification.create({
-      data: {
-        bankId: cbeBank.id,
-        reference,
-        provider: "CBE",
-        status: result.success ? "verified" : "failed",
-        amount: toNullable(result.amount),
-        transactionDate: toNullable(result.date ? new Date(result.date) : null),
-        rawData: { ...result },
-      },
-    });
-
-    logger.info(`Verification saved: ${verification.id}`);
-    return verification;
+      default:
+        return { success: false, error: `Bank ${bank} not supported yet` };
+    }
   }
 }
