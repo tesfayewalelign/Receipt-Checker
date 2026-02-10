@@ -1,17 +1,28 @@
 import { Request, Response } from "express";
-import { VerificationService } from "./verification.service";
+import { VerificationService, VerifyPayload } from "./verification.service";
 import { handleResponse } from "../../utils/response";
 import { BankType } from "../../verifiers/bank.verifier";
 
+type MulterFile = {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination?: string;
+  filename?: string;
+  path?: string;
+  buffer?: Buffer;
+};
+
 type MulterRequest = Request & {
-  file?: Express.Multer.File;
+  file?: MulterFile;
 };
 
 export class VerificationController {
   static async verify(req: Request, res: Response) {
-    const file = (req as MulterRequest).file;
-
     const { bank, reference, accountSuffix } = req.body;
+    const file = (req as MulterRequest).file;
 
     if (!bank) {
       return handleResponse(res, null, "Bank is required", false);
@@ -31,11 +42,18 @@ export class VerificationController {
     }
 
     try {
-      const result = await VerificationService.verifyReceipt(bank, {
-        pdfBuffer: file?.buffer,
-        reference,
-        accountSuffix,
-      });
+      let payload: VerifyPayload;
+
+      if (file) {
+        payload = { pdfBuffer: file.buffer! };
+      } else {
+        payload = {
+          reference: reference as string,
+          accountSuffix: accountSuffix as string,
+        };
+      }
+
+      const result = await VerificationService.verifyReceipt(bank, payload);
 
       if (!result.success) {
         return handleResponse(res, result, result.error, false);
