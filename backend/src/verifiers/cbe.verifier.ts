@@ -61,7 +61,6 @@ async function fetchCBEReceiptPdf(
   const url = `https://apps.cbe.com.et:100/?id=${fullId}`;
 
   let browser: Browser | null = null;
-  let pdfResponse: HTTPResponse | null = null;
   let pdfUrl: string | null = null;
 
   try {
@@ -92,11 +91,6 @@ async function fetchCBEReceiptPdf(
     });
 
     await new Promise((resolve) => setTimeout(resolve, 5000));
-    if (!pdfResponse) {
-      throw new Error(
-        "Receipt PDF not accessible. Reference may be invalid, expired, or blocked.",
-      );
-    }
 
     if (typeof pdfUrl !== "string") {
       throw new Error(
@@ -104,7 +98,6 @@ async function fetchCBEReceiptPdf(
       );
     }
 
-    // ⬇️ TS now KNOWS this is string
     const download = await axios.get(pdfUrl, {
       responseType: "arraybuffer",
       httpsAgent,
@@ -124,6 +117,17 @@ async function fetchCBEReceiptPdf(
 
 async function parseCBEReceipt(buffer: Buffer): Promise<VerifyResult> {
   try {
+    if (!buffer || buffer.length < 1000) {
+      return {
+        success: false,
+        error: "Downloaded file is too small to be a PDF",
+      };
+    }
+
+    if (!buffer.slice(0, 4).toString().includes("%PDF")) {
+      return { success: false, error: "Downloaded file is not a valid PDF" };
+    }
+
     const pdfParse = require("pdf-parse");
     const pdf = await pdfParse(buffer);
     const text = pdf.text.replace(/\s+/g, " ").trim();
@@ -172,6 +176,12 @@ async function parseCBEReceipt(buffer: Buffer): Promise<VerifyResult> {
     const parsedDate = new Date(dateText);
     if (isNaN(parsedDate.getTime())) {
       return { success: false, error: "Invalid date format in receipt" };
+    }
+    if (!pdf.text || pdf.text.trim().length < 50) {
+      return {
+        success: false,
+        error: "PDF contains no readable text (possibly scanned or encrypted)",
+      };
     }
 
     return {
