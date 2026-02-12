@@ -2,10 +2,7 @@ import puppeteer, { Browser, HTTPResponse } from "puppeteer";
 import axios from "axios";
 import https from "https";
 
-import pdfParseCJS from "pdf-parse";
-const pdfParse = pdfParseCJS as unknown as (
-  buffer: Buffer,
-) => Promise<{ text: string }>;
+const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
 
 export interface VerifyResult {
   success: boolean;
@@ -77,37 +74,25 @@ async function fetchCBEReceiptPdf(
 
     const page = await browser.newPage();
     await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     );
 
     page.on("response", (response: HTTPResponse) => {
       const ct = response.headers()["content-type"];
       if (ct && ct.includes("application/pdf")) {
         pdfUrl = response.url();
-        console.log("📄 PDF found:", pdfUrl);
       }
     });
 
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 25000 });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
-    if (!pdfUrl) {
-      throw new Error(
-        "Receipt PDF not accessible. Reference may be invalid or expired.",
-      );
-    }
+    if (!pdfUrl) throw new Error("Receipt PDF not found on page.");
 
     const download = await axios.get(pdfUrl, {
       responseType: "arraybuffer",
       httpsAgent,
       timeout: 30000,
     });
-
-    console.log("Download headers:", download.headers);
-    console.log("Downloaded bytes:", download.data.byteLength);
-
-    if (!download.headers["content-type"]?.includes("pdf")) {
-      throw new Error("Downloaded file is not a valid PDF");
-    }
 
     return Buffer.from(download.data);
   } finally {
@@ -119,83 +104,90 @@ export async function parseCBEReceipt(
   buffer: Buffer | ArrayBuffer,
 ): Promise<VerifyResult> {
   try {
-    const pdfBuffer =
-      buffer instanceof ArrayBuffer ? Buffer.from(buffer) : buffer;
+    const uint8Array = new Uint8Array(buffer);
 
-    const parsed = await pdfParse(pdfBuffer);
+    const loadingTask = pdfjs.getDocument({
+      data: uint8Array,
 
-    const rawText = parsed.text
-      .replace(/\r\n/g, "\n")
-      .replace(/\s+/g, " ")
-      .trim();
-    console.log("PDF snippet (first 500 chars):\n", rawText.slice(0, 500));
+      standardFontDataUrl: "https://unpkg.com",
+      useSystemFonts: true,
+      disableFontFace: true,
+    });
 
-    const payerMatch = rawText.match(
-      /Payer\s*:\s*(.*?)\s+Account\s*:\s*([A-Z0-9*]+)/i,
-    );
+    const pdfDocument = await loadingTask.promise;
+    let fullText = "";
+
+    for (let i = 1; i <= pdfDocument.numPages; i++) {
+      const page = await pdfDocument.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageItems: any[] = textContent.items;
+      const pageText = pageItems.map((item) => item.str).join(" ");
+      fullText += pageText + "\n";
+    }
+
+    const rawText = fullText.replace(/\s+/g, " ").trim();
+    console.log("📄 Processing Raw Text...");
+
+    const payerMatch = rawText.match(/Payer\s+(.*?)\s+Account\s+([\w*]+)/i);
+
     const receiverMatch = rawText.match(
-      /Receiver\s*:\s*(.*?)\s+Account\s*:\s*([A-Z0-9*]+)/i,
+      /Receiver\s+(.*?)\s+Account\s+([\w*]+)/i,
+    );
+
+    const refMatch = rawText.match(
+      /Reference\s+No\.?\s*\(VAT\s+Invoice\s+No\)\s+([A-Z0-9]+)/i,
+    );
+
+    const amountMatch = rawText.match(
+      /Transferred\s+Amount\s+([\d,]+\.\d{2})\s+ETB/i,
+    );
+
+    const dateMatch = rawText.match(
+      /Payment\s+Date\s+&\s+Time\s+([\d\/,: ]+(?:AM|PM))/i,
+    );
+
+    const reasonMatch = rawText.match(
+      /Reason\s*\/\s*Type\s+of\s+service\s+(.*?)\s+Transferred/i,
     );
 
     const payerName = payerMatch?.[1]?.trim();
     const payerAccount = payerMatch?.[2]?.trim();
     const receiverName = receiverMatch?.[1]?.trim();
     const receiverAccount = receiverMatch?.[2]?.trim();
+    const reference = refMatch?.[1]?.trim();
+    const amountText = amountMatch?.[1]?.trim();
+    const dateText = dateMatch?.[1]?.trim();
 
-    const reference = rawText
-      .match(/Reference No\.?\s*\(VAT Invoice No\)\s*:\s*([A-Z0-9]+)/i)?.[1]
-      ?.trim();
-    const reason = rawText
-      .match(
-        /Reason\s*\/\s*Type of service\s*:\s*(.*?)\s+Transferred Amount/i,
-      )?.[1]
-      ?.trim();
-    const amountText = rawText
-      .match(/Transferred Amount\s*:\s*([\d,]+\.\d{2})\s*ETB/i)?.[1]
-      ?.trim();
-    const dateText = rawText
-      .match(/Payment Date & Time\s*:\s*([\d\/,: ]+[APM]{2})/i)?.[1]
-      ?.trim();
-
-    const amount = amountText
-      ? parseFloat(amountText.replace(/,/g, ""))
-      : undefined;
-    const date = dateText ? new Date(dateText) : undefined;
-
-    if (
-      payerName &&
-      payerAccount &&
-      receiverName &&
-      receiverAccount &&
-      amount &&
-      date &&
-      reference
-    ) {
+    if (payerName && receiverName && reference && amountText && dateText) {
       return {
         success: true,
         data: {
           payer: titleCase(payerName),
-          payerAccount,
+          payerAccount: payerAccount || "N/A",
           receiver: titleCase(receiverName),
-          receiverAccount,
-          amount,
-          date,
-          reference,
-          reason: reason || null,
+          receiverAccount: receiverAccount || "N/A",
+          amount: parseFloat(amountText.replace(/,/g, "")),
+          date: new Date(dateText.replace(",", "")),
+          reference: reference,
+          reason: reasonMatch?.[1]?.trim() || null,
         },
       };
     } else {
-      console.error(
-        "❌ Could not extract all fields. PDF snippet:\n",
-        rawText.slice(0, 1000),
-      );
+      const missing = [];
+      if (!payerName) missing.push("Payer");
+      if (!receiverName) missing.push("Receiver");
+      if (!reference) missing.push("Reference");
+      if (!amountText) missing.push("Amount");
+      if (!dateText) missing.push("Date");
+
+      console.error("❌ Extraction incomplete. Missing:", missing.join(", "));
       return {
         success: false,
-        error: "Could not extract all required fields from PDF.",
+        error: `Could not extract: ${missing.join(", ")}`,
       };
     }
   } catch (err: any) {
-    console.error("❌ PDF parsing failed:", err.message);
-    return { success: false, error: "Error parsing PDF data" };
+    console.error("❌ Parser Error:", err.message);
+    return { success: false, error: "Failed to parse PDF: " + err.message };
   }
 }
