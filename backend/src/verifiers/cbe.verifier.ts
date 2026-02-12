@@ -24,31 +24,71 @@ const titleCase = (str: string) =>
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
+async function extractReferenceFromUploadedPdf(
+  buffer: Buffer,
+): Promise<string> {
+  const uint8Array = new Uint8Array(buffer);
+  const pdf = await pdfjs.getDocument({ data: uint8Array }).promise;
+
+  let text = "";
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map((i: any) => i.str).join(" ") + " ";
+  }
+
+  const raw = text.replace(/\s+/g, " ");
+
+  const reference = raw.match(
+    /Reference\s+No\.?\s*\(VAT\s+Invoice\s+No\)\s+([A-Z0-9]+)/i,
+  )?.[1];
+
+  if (!reference) {
+    throw new Error("Reference not found in uploaded PDF");
+  }
+
+  return reference;
+}
+
+async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
+  throw new Error("Image OCR not implemented yet");
+}
+
 export async function verifyCBE(payload: {
   pdfBuffer?: Buffer;
   reference?: string;
   accountSuffix?: string;
+  fileType?: "pdf" | "image";
 }): Promise<VerifyResult> {
   try {
-    let pdfBuffer: Buffer;
-
-    if (payload.pdfBuffer) {
-      pdfBuffer = payload.pdfBuffer;
-      console.log("✅ Using provided PDF buffer");
-    } else if (payload.reference && payload.accountSuffix) {
-      console.log("🔄 Fetching PDF from CBE website...");
-      pdfBuffer = await fetchCBEReceiptPdf(
-        payload.reference,
-        payload.accountSuffix,
-      );
-    } else {
-      return { success: false, error: "No PDF or reference provided" };
+    if (!payload.accountSuffix) {
+      return { success: false, error: "accountSuffix is required" };
     }
 
-    return await parseCBEReceipt(pdfBuffer);
+    let reference = payload.reference;
+
+    if (!reference && payload.pdfBuffer) {
+      if (payload.fileType === "pdf") {
+        reference = await extractReferenceFromUploadedPdf(payload.pdfBuffer);
+      } else {
+        reference = await extractReferenceFromImage(payload.pdfBuffer);
+      }
+    }
+
+    if (!reference) {
+      return { success: false, error: "Reference not found" };
+    }
+
+    const officialPdf = await fetchCBEReceiptPdf(
+      reference,
+      payload.accountSuffix,
+    );
+
+    return await parseCBEReceipt(officialPdf);
   } catch (err: any) {
     console.error("❌ Verification failed:", err.message);
-    return { success: false, error: err?.message || "CBE verification failed" };
+    return { success: false, error: err.message };
   }
 }
 
