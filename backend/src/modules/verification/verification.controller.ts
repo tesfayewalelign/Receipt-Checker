@@ -24,6 +24,9 @@ export class VerificationController {
     const { bank, reference, accountSuffix } = req.body;
     const file = (req as MulterRequest).file;
 
+    console.log("req.body:", req.body);
+    console.log("req.file:", req.file);
+
     if (!bank) {
       return handleResponse(res, null, "Bank is required", false);
     }
@@ -41,12 +44,18 @@ export class VerificationController {
       );
     }
 
+    if (!accountSuffix) {
+      return handleResponse(res, null, "accountSuffix is required", false);
+    }
+
     try {
       let payload: VerifyPayload;
 
       if (file) {
-        payload = { pdfBuffer: file.buffer! };
+        // ✅ Include fileType so verifyCBE knows to extract reference from PDF
+        payload = { pdfBuffer: file.buffer!, fileType: "pdf", accountSuffix };
       } else {
+        // Manual reference provided
         payload = {
           reference: reference as string,
           accountSuffix: accountSuffix as string,

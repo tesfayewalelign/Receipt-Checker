@@ -6,6 +6,7 @@ export interface VerifyPayload {
   pdfBuffer?: Buffer;
   reference?: string;
   accountSuffix?: string;
+  fileType?: "pdf" | "image";
 }
 
 export class VerificationService {
