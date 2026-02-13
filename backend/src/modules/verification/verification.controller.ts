@@ -36,29 +36,20 @@ export class VerificationController {
       return handleResponse(res, null, `Bank ${bank} is not supported`, false);
     }
 
-    if (!file && (!reference || !accountSuffix)) {
-      return handleResponse(
-        res,
-        null,
-        "Provide PDF file or reference with account suffix",
-        false,
-      );
-    }
-
-    if (!accountSuffix) {
-      return handleResponse(res, null, "accountSuffix is required", false);
-    }
-
     try {
-      let payload: VerifyPayload;
+      let payload: VerifyPayload = {};
 
       if (file) {
-        payload = { pdfBuffer: file.buffer!, fileType: "pdf", accountSuffix };
-      } else {
-        payload = {
-          reference: reference as string,
-          accountSuffix: accountSuffix as string,
-        };
+        payload.pdfBuffer = file.buffer!;
+        payload.fileType = file.mimetype.includes("pdf") ? "pdf" : "image";
+      }
+
+      if (reference) {
+        payload.reference = reference;
+      }
+
+      if (accountSuffix) {
+        payload.accountSuffix = accountSuffix;
       }
 
       const result = await VerificationService.verifyReceipt(bank, payload);
@@ -81,29 +72,5 @@ export class VerificationController {
         false,
       );
     }
-  }
-}
-
-export async function verifyTelebirrController(req: Request, res: Response) {
-  try {
-    const reference = req.body.reference;
-    const file = req.file;
-
-    const result = await verifyTelebirr({
-      reference,
-      fileBuffer: file?.buffer,
-      fileType: file?.mimetype,
-    });
-
-    if (!result.success) {
-      return res.status(400).json(result);
-    }
-
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
   }
 }

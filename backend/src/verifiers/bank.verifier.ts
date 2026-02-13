@@ -1,5 +1,6 @@
 import { VerifyResult } from "./cbe.verifier";
 import { verifyCBE } from "./cbe.verifier";
+import { verifyTelebirr } from "./telebirr.verifier";
 
 export enum BankType {
   CBE = "CBE",
@@ -13,6 +14,8 @@ export async function verifyByBank(
   switch (bank) {
     case BankType.CBE:
       return verifyCBE(payload);
+    case BankType.TELEBIRR:
+      return verifyTelebirr(payload);
 
     default:
       return { success: false, error: "Unsupported bank" };

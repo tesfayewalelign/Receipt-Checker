@@ -11,32 +11,55 @@ interface TelebirrReceipt {
 }
 
 function buildTelebirrReceiptUrl(reference: string): string {
-  return `https://telebirr.com/receipt?transactionNo=${reference}`;
+  return `https://transactioninfo.ethiotelecom.et/receipt/${reference}`;
 }
 
-export async function fetchTelebirrReceiptHtml(
-  reference: string,
-): Promise<string> {
+async function fetchTelebirrReceiptHtml(reference: string): Promise<string> {
   const url = buildTelebirrReceiptUrl(reference);
 
   const response = await axios.get(url, {
     timeout: 15000,
     headers: {
-      "User-Agent": "Mozilla/5.0",
-      Accept: "text/html",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      Accept: "text/html,application/xhtml+xml",
     },
+    validateStatus: (status) => status < 500,
   });
+
+  if (response.status !== 200) {
+    throw new Error("Failed to fetch Telebirr receipt");
+  }
 
   return response.data;
 }
 
-function parseTelebirrReceipt(html: string): TelebirrReceipt | null {
+function extractWithRegex(html: string, label: string): string | null {
+  const regex = new RegExp(`${label}.*?(\\d+(\\.\\d{2})?)`, "i");
+  const match = html.match(regex);
+  return match ? match[1] : null;
+}
+
+function parseTelebirrReceipt(
+  html: string,
+  requestedReference: string,
+): TelebirrReceipt | null {
+  if (!html.toLowerCase().includes("telebirr")) {
+    return null;
+  }
+
   const $ = cheerio.load(html);
 
-  const reference = $("#transactionNo").text().trim();
-  const amountText = $("#paidAmount").text().trim();
-  const payer = $("#payerName").text().trim();
-  const dateText = $("#paymentDate").text().trim();
+  const reference =
+    $('td:contains("Transaction")').next().text().trim() || requestedReference;
+
+  const amountText =
+    $('td:contains("Amount")').next().text().trim() ||
+    extractWithRegex(html, "Amount");
+
+  const payer = $('td:contains("Payer")').next().text().trim() || undefined;
+
+  const dateText = $('td:contains("Date")').next().text().trim() || undefined;
 
   if (!reference || !amountText) {
     return null;
@@ -44,9 +67,13 @@ function parseTelebirrReceipt(html: string): TelebirrReceipt | null {
 
   const amount = parseFloat(amountText.replace(/[^\d.]/g, ""));
 
+  if (!amount || amount <= 0) {
+    return null;
+  }
+
   return {
     reference,
-    payer: payer || undefined,
+    payer,
     amount,
     paymentMode: "telebirr",
     date: dateText ? new Date(dateText) : new Date(),
@@ -68,7 +95,8 @@ export async function verifyTelebirr(payload: {
     }
 
     const html = await fetchTelebirrReceiptHtml(reference);
-    const receipt = parseTelebirrReceipt(html);
+    console.log(html);
+    const receipt = parseTelebirrReceipt(html, reference);
 
     if (!receipt) {
       return {
