@@ -2,10 +2,6 @@ import axios from "axios";
 import cheerio from "cheerio";
 import { VerifyResult } from "./cbe.verifier";
 
-/**
- * Internal representation of a Telebirr receipt
- * This is NOT tied to HTTP or Express
- */
 interface TelebirrReceipt {
   reference: string;
   payer?: string;
@@ -14,19 +10,13 @@ interface TelebirrReceipt {
   date: Date;
 }
 
-/**
- * Build Telebirr public receipt URL
- * Single responsibility: URL construction only
- */
 function buildTelebirrReceiptUrl(reference: string): string {
   return `https://telebirr.com/receipt?transactionNo=${reference}`;
 }
 
-/**
- * Fetch Telebirr receipt HTML
- * No parsing here — just HTTP
- */
-async function fetchTelebirrReceiptHtml(reference: string): Promise<string> {
+export async function fetchTelebirrReceiptHtml(
+  reference: string,
+): Promise<string> {
   const url = buildTelebirrReceiptUrl(reference);
 
   const response = await axios.get(url, {
@@ -40,17 +30,9 @@ async function fetchTelebirrReceiptHtml(reference: string): Promise<string> {
   return response.data;
 }
 
-/**
- * Parse Telebirr receipt HTML
- * This is the CORE business logic
- */
 function parseTelebirrReceipt(html: string): TelebirrReceipt | null {
   const $ = cheerio.load(html);
 
-  /**
-   * ⚠️ These selectors are examples
-   * You will adjust them based on real Telebirr HTML
-   */
   const reference = $("#transactionNo").text().trim();
   const amountText = $("#paidAmount").text().trim();
   const payer = $("#payerName").text().trim();
@@ -71,10 +53,6 @@ function parseTelebirrReceipt(html: string): TelebirrReceipt | null {
   };
 }
 
-/**
- * ✅ PUBLIC ENTRY POINT
- * This is what bank.verifier.ts will call
- */
 export async function verifyTelebirr(payload: {
   reference?: string;
   pdfBuffer?: Buffer;

@@ -1,6 +1,7 @@
 import logger from "../../utils/logger";
 import { BankType, verifyByBank } from "../../verifiers/bank.verifier";
 import { VerifyResult } from "../../verifiers/cbe.verifier";
+import { fetchTelebirrReceiptHtml } from "../../verifiers/telebirr.verifier";
 
 export interface VerifyPayload {
   pdfBuffer?: Buffer;
@@ -35,4 +36,26 @@ export class VerificationService {
       return { success: false, error: err.message || "Verification failed" };
     }
   }
+}
+export async function verifyTelebirr(payload: {
+  reference?: string;
+  fileBuffer?: Buffer;
+  fileType?: string;
+}) {
+  let reference = payload.reference;
+
+  if (!reference) {
+    return { success: false, error: "Reference is required" };
+  }
+
+  const receipt = await fetchTelebirrReceiptHtml(reference);
+
+  if (!receipt) {
+    return { success: false, error: "Receipt not found" };
+  }
+
+  return {
+    success: true,
+    data: receipt,
+  };
 }

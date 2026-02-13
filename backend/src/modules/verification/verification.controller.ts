@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { VerificationService, VerifyPayload } from "./verification.service";
 import { handleResponse } from "../../utils/response";
 import { BankType } from "../../verifiers/bank.verifier";
+import { verifyTelebirr } from "../../verifiers/telebirr.verifier";
 
 type MulterFile = {
   fieldname: string;
@@ -52,10 +53,8 @@ export class VerificationController {
       let payload: VerifyPayload;
 
       if (file) {
-        // ✅ Include fileType so verifyCBE knows to extract reference from PDF
         payload = { pdfBuffer: file.buffer!, fileType: "pdf", accountSuffix };
       } else {
-        // Manual reference provided
         payload = {
           reference: reference as string,
           accountSuffix: accountSuffix as string,
@@ -82,5 +81,29 @@ export class VerificationController {
         false,
       );
     }
+  }
+}
+
+export async function verifyTelebirrController(req: Request, res: Response) {
+  try {
+    const reference = req.body.reference;
+    const file = req.file;
+
+    const result = await verifyTelebirr({
+      reference,
+      fileBuffer: file?.buffer,
+      fileType: file?.mimetype,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
   }
 }
