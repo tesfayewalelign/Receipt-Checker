@@ -15,7 +15,10 @@ export async function verifyByBank(
     case BankType.CBE:
       return verifyCBE(payload);
     case BankType.TELEBIRR:
-      return verifyTelebirr(payload);
+      if (!payload.reference) {
+        return { success: false, error: "Reference is required for Telebirr" };
+      }
+      return verifyTelebirr(payload.reference);
 
     default:
       return { success: false, error: "Unsupported bank" };

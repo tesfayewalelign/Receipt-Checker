@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { VerificationService, VerifyPayload } from "./verification.service";
 import { handleResponse } from "../../utils/response";
 import { BankType } from "../../verifiers/bank.verifier";
-import { verifyTelebirr } from "../../verifiers/telebirr.verifier";
+import { TelebirrVerifier } from "../../verifiers/telebirr.verifier";
 
 type MulterFile = {
   fieldname: string;
