@@ -6,6 +6,7 @@ export enum BankType {
   CBE = "CBE",
   TELEBIRR = "TELEBIRR",
   DASHEN = "DASHEN",
+  ABYSSINIA = "ABYSSINIA",
 }
 export async function verifyByBank(
   bank: BankType,
