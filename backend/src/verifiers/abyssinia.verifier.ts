@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import logger from "../utils/logger";
-import { VerifyResult } from "./verifyCBE";
+import { VerifyResult } from "./cbe.verifier";
 
 export interface AbyssiniaReceipt {
   payerName: string;
@@ -99,7 +99,7 @@ export async function verifyAbyssinia(
       transferredAmount,
       transactionReference:
         transaction["Transaction Reference"] ||
-        transactionReference ||
+        transaction.transactionReference ||
         reference,
       transactionDate: transactionDate!,
       narrative: transaction.Narrative || transaction.narrative || null,
@@ -117,31 +117,33 @@ export async function verifyAbyssinia(
     logger.debug("🔄 Mapping fields to VerifyResult...");
     const result: VerifyResult = {
       success: true,
-      payer: receipt.payerName,
-      payerAccount: receipt.sourceAccount,
-      receiver: receipt.sourceAccountName,
-      receiverAccount: undefined,
-      amount: receipt.transferredAmount,
-      date: receipt.transactionDate,
-      reference: receipt.transactionReference,
-      reason: receipt.narrative,
+      data: {
+        payer: receipt.payerName,
+        payerAccount: receipt.sourceAccount,
+        receiver: receipt.sourceAccountName,
+        receiverAccount: "",
+        amount: receipt.transferredAmount,
+        date: receipt.transactionDate,
+        reference: receipt.transactionReference,
+        reason: receipt.narrative,
+      },
     };
 
     if (
-      !result.reference ||
-      !result.amount ||
-      !result.payer ||
-      !result.receiver
+      !result.data?.reference ||
+      !result.data?.amount ||
+      !result.data?.payer ||
+      !result.data?.receiver
     ) {
       logger.error("❌ Essential fields missing in transaction data", result);
       return { success: false, error: "Missing essential transaction fields" };
     }
 
     logger.info(
-      `✅ Successfully verified Abyssinia transaction: ${result.reference}`,
+      `✅ Successfully verified Abyssinia transaction: ${result.data?.reference}`,
     );
     logger.debug(
-      `💰 Key details - Amount: ${result.amount}, Payer: ${result.payer}, Date: ${result.date}`,
+      `💰 Key details - Amount: ${result.data?.amount}, Payer: ${result.data?.payer}, Date: ${result.data?.date}`,
     );
 
     return result;
