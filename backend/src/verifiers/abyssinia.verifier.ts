@@ -27,7 +27,7 @@ export async function verifyAbyssinia(
       `🏦 Starting Abyssinia verification for reference: ${reference}, suffix: ${suffix}`,
     );
 
-    const apiUrl = `https://cs.bankofabyssinia.com/api/onlineSlip/getDetails/?id=${reference}${suffix}`;
+    const apiUrl = `https://cs.bankofabyssinia.com/slip/?trx=${reference}${suffix}`;
     logger.info(`📡 Fetching transaction from URL: ${apiUrl}`);
 
     const response = await axios.get(apiUrl, {
