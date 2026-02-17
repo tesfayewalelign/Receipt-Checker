@@ -38,6 +38,15 @@ export class VerificationService {
         }
         break;
 
+      case BankType.ABYSSINIA:
+        if (!payload.reference || !payload.accountSuffix) {
+          return {
+            success: false,
+            error: "Provide reference and account suffix for Abyssinia",
+          };
+        }
+        break;
+
       default:
         return {
           success: false,

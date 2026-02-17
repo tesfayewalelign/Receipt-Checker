@@ -25,13 +25,13 @@ export async function verifyByBank(
       return verifyTelebirr(payload.reference);
 
     case BankType.ABYSSINIA:
-      if (!payload.reference || !payload.suffix) {
+      if (!payload.reference || !payload.accountSuffix) {
         return {
           success: false,
-          error: "Reference and suffix are required for Abyssinia",
+          error: "Reference and account suffix are required for Abyssinia",
         };
       }
-      return verifyAbyssinia(payload.reference, payload.suffix);
+      return verifyAbyssinia(payload.reference, payload.accountSuffix);
 
     default:
       return { success: false, error: `Unsupported bank: ${bank}` };

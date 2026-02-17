@@ -12,7 +12,7 @@ export interface VerifyResult {
     receiver: string;
     receiverAccount: string;
     amount: number;
-    date: Date;
+    date: Date | null;
     reference: string;
     reason?: string | null;
   };

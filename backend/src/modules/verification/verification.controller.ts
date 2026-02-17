@@ -32,9 +32,16 @@ export class VerificationController {
       return handleResponse(res, null, "Bank is required", false);
     }
 
-    if (!Object.values(BankType).includes(bank)) {
+    const normalizedBank = bank?.trim().toUpperCase();
+
+    if (!Object.values(BankType).includes(normalizedBank as BankType)) {
       return handleResponse(res, null, `Bank ${bank} is not supported`, false);
     }
+    console.log("Bank raw:", bank);
+    console.log("Bank JSON:", JSON.stringify(bank));
+    console.log("Length:", bank.length);
+    console.log("Enum values:", Object.values(BankType));
+    console.log("Includes:", Object.values(BankType).includes(bank));
 
     try {
       let payload: VerifyPayload = {};

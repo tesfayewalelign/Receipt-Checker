@@ -1,165 +1,84 @@
-import axios, { AxiosError } from "axios";
-import logger from "../utils/logger";
+import puppeteer, { Browser } from "puppeteer";
 import { VerifyResult } from "./cbe.verifier";
 
-export interface AbyssiniaReceipt {
-  payerName: string;
-  sourceAccount: string;
-  sourceAccountName: string;
-  transferredAmount: number;
-  transactionReference: string;
-  transactionDate: Date;
-  narrative?: string | null;
-  vat?: string;
-  totalAmountIncludingVAT?: string;
-  serviceCharge?: string;
-  transactionType?: string;
-  tel?: string;
-  address?: string;
-}
+const titleCase = (str: string) =>
+  str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
 export async function verifyAbyssinia(
   reference: string,
-  suffix: string,
+  accountSuffix: string,
 ): Promise<VerifyResult> {
+  let browser: Browser | null = null;
+
   try {
-    logger.info(
-      `🏦 Starting Abyssinia verification for reference: ${reference}, suffix: ${suffix}`,
-    );
+    const url = `https://cs.bankofabyssinia.com/slip/?trx=${reference}${accountSuffix}`;
+    browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
-    const apiUrl = `https://cs.bankofabyssinia.com/slip/?trx=${reference}${suffix}`;
-    logger.info(`📡 Fetching transaction from URL: ${apiUrl}`);
+    const receipt = await page.evaluate(() => {
+      const getText = (label: string) => {
+        const td = Array.from(document.querySelectorAll("td")).find(
+          (el) => el.textContent?.trim() === label,
+        );
+        return td?.nextElementSibling?.textContent?.trim() || "";
+      };
 
-    const response = await axios.get(apiUrl, {
-      timeout: 30000,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        Accept: "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache",
-      },
+      return {
+        receiverAccount: getText("Receiver's Account"),
+        receiverName: getText("Receiver's Name"),
+        transferredAmount: parseFloat(
+          (getText("Transferred amount") || "0").replace(/[^\d.]/g, ""),
+        ),
+        transactionType: getText("Transaction Type"),
+        transactionDate: getText("Transaction Date"),
+        transactionReference: getText("Transaction Reference"),
+        narrative: getText("Narrative") || null,
+      };
     });
 
-    logger.info(`✅ Response status: ${response.status}`);
-    logger.debug(
-      `📋 Response headers: ${JSON.stringify(response.headers, null, 2)}`,
-    );
+    const missing: string[] = [];
+    if (!receipt.receiverAccount) missing.push("Receiver Account");
+    if (!receipt.receiverName) missing.push("Receiver Name");
+    if (!receipt.transferredAmount) missing.push("Transferred Amount");
+    if (!receipt.transactionDate) missing.push("Transaction Date");
+    if (!receipt.transactionReference) missing.push("Transaction Reference");
 
-    const data = response.data;
-    logger.debug(
-      `📄 Response body preview: ${JSON.stringify(data).slice(0, 1000)}`,
-    );
-
-    if (!data || !data.header || !data.body || !Array.isArray(data.body)) {
-      logger.error("❌ Invalid response structure from Abyssinia API");
+    if (missing.length > 0) {
       return {
         success: false,
-        error: "Invalid response structure from Abyssinia API",
+        error: `Could not extract essential fields: ${missing.join(", ")}`,
       };
     }
 
-    if (data.header.status !== "success") {
-      logger.error(`❌ API returned error status: ${data.header.status}`);
-      return {
-        success: false,
-        error: `API returned error status: ${data.header.status}`,
-      };
-    }
-
-    if (data.body.length === 0) {
-      logger.error("❌ No transaction data found in response body");
-      return {
-        success: false,
-        error: "No transaction data found in response body",
-      };
-    }
-
-    const transaction = data.body[0];
-    logger.debug(
-      `📋 Transaction raw data: ${JSON.stringify(transaction, null, 2)}`,
+    const [day, month, yearHour] = receipt.transactionDate.split("/");
+    const [year, time] = yearHour.split(" ");
+    const [hour, minute] = time.split(":");
+    const transactionDate = new Date(
+      Number(`20${year}`),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
     );
 
-    const amountStr =
-      transaction["Transferred Amount"] || transaction.transferredAmount || "";
-    const transferredAmount = parseFloat(amountStr.replace(/[^\d.]/g, ""));
-    const dateStr =
-      transaction["Transaction Date"] || transaction.transactionDate;
-    const transactionDate = dateStr ? new Date(dateStr) : undefined;
-
-    const receipt: AbyssiniaReceipt = {
-      payerName: transaction["Payer's Name"] || transaction.payerName || "",
-      sourceAccount:
-        transaction["Source Account"] || transaction.sourceAccount || "",
-      sourceAccountName:
-        transaction["Source Account Name"] ||
-        transaction.sourceAccountName ||
-        "",
-      transferredAmount,
-      transactionReference:
-        transaction["Transaction Reference"] ||
-        transaction.transactionReference ||
-        reference,
-      transactionDate: transactionDate!,
-      narrative: transaction.Narrative || transaction.narrative || null,
-      vat: transaction.VAT || transaction.vat,
-      totalAmountIncludingVAT:
-        transaction["Total Amount Including VAT"] ||
-        transaction.totalAmountIncludingVAT,
-      serviceCharge: transaction["Service Charge"] || transaction.serviceCharge,
-      transactionType:
-        transaction["Transaction Type"] || transaction.transactionType,
-      tel: transaction.Tel || transaction.tel,
-      address: transaction.Address || transaction.address,
-    };
-
-    logger.debug("🔄 Mapping fields to VerifyResult...");
-    const result: VerifyResult = {
+    return {
       success: true,
       data: {
-        payer: receipt.payerName,
-        payerAccount: receipt.sourceAccount,
-        receiver: receipt.sourceAccountName,
-        receiverAccount: "",
+        payer: receipt.receiverName,
+        payerAccount: "",
+        receiver: receipt.receiverName,
+        receiverAccount: receipt.receiverAccount,
         amount: receipt.transferredAmount,
-        date: receipt.transactionDate,
+        date: transactionDate,
         reference: receipt.transactionReference,
         reason: receipt.narrative,
       },
     };
-
-    if (
-      !result.data?.reference ||
-      !result.data?.amount ||
-      !result.data?.payer ||
-      !result.data?.receiver
-    ) {
-      logger.error("❌ Essential fields missing in transaction data", result);
-      return { success: false, error: "Missing essential transaction fields" };
-    }
-
-    logger.info(
-      `✅ Successfully verified Abyssinia transaction: ${result.data?.reference}`,
-    );
-    logger.debug(
-      `💰 Key details - Amount: ${result.data?.amount}, Payer: ${result.data?.payer}, Date: ${result.data?.date}`,
-    );
-
-    return result;
-  } catch (error) {
-    if (error instanceof AxiosError) {
-      logger.error(
-        `❌ HTTP Error fetching Abyssinia receipt: ${error.message}`,
-      );
-      if (error.response) {
-        logger.error(
-          `📊 Status: ${error.response.status}, Data: ${JSON.stringify(error.response.data)}`,
-        );
-      }
-    } else {
-      logger.error("❌ Unexpected error in verifyAbyssinia:", error);
-    }
+  } catch (err: any) {
     return { success: false, error: "Failed to verify Abyssinia transaction" };
+  } finally {
+    if (browser) await browser.close();
   }
 }
