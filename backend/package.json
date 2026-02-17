@@ -27,7 +27,6 @@
     "pdfjs-dist": "^3.11.174",
     "pg": "^8.18.0",
     "prisma": "^5.22.0",
-    "puppeteer": "^24.37.3",
     "tough-cookie": "^6.0.0",
     "winston": "^3.19.0"
   },
@@ -38,6 +37,8 @@
     "@types/node": "^25.2.0",
     "@types/pdfjs-dist": "^2.10.377",
     "@types/pg": "^8.16.0",
+    "@types/puppeteer": "^7.0.4",
+    "puppeteer": "^24.37.3",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
