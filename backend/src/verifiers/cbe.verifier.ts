@@ -7,13 +7,13 @@ const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
 export interface VerifyResult {
   success: boolean;
   data?: {
-    payer: string;
-    payerAccount: string;
-    receiver: string;
-    receiverAccount: string;
-    amount: number;
+    payer: string | null;
+    payerAccount: string | null;
+    receiver: string | null;
+    receiverAccount: string | null;
+    amount: number | null;
     date: Date | null;
-    reference: string;
+    reference: string | null;
     reason?: string | null;
   };
   error?: string;

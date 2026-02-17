@@ -2,7 +2,7 @@ import { VerifyResult } from "./cbe.verifier";
 import { verifyCBE } from "./cbe.verifier";
 import { verifyTelebirr } from "./telebirr.verifier";
 import { verifyAbyssinia } from "./abyssinia.verifier";
-
+import { verifyDashen } from "./dashn.verifier";
 export enum BankType {
   CBE = "CBE",
   TELEBIRR = "TELEBIRR",
@@ -32,6 +32,12 @@ export async function verifyByBank(
         };
       }
       return verifyAbyssinia(payload.reference, payload.accountSuffix);
+
+    case BankType.DASHEN:
+      if (!payload.reference) {
+        return { success: false, error: "Reference is required for Dashen" };
+      }
+      return verifyDashen(payload.reference);
 
     default:
       return { success: false, error: `Unsupported bank: ${bank}` };
