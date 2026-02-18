@@ -51,11 +51,11 @@ export class VerificationController {
         payload.fileType = file.mimetype.includes("pdf") ? "pdf" : "image";
       }
 
-      if (reference) {
+      if (reference !== undefined) {
         payload.reference = reference;
       }
 
-      if (accountSuffix) {
+      if (accountSuffix !== undefined) {
         payload.accountSuffix = accountSuffix;
       }
 

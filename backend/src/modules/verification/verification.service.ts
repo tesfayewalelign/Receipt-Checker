@@ -39,13 +39,21 @@ export class VerificationService {
         break;
 
       case BankType.ABYSSINIA:
-        if (!payload.reference || !payload.accountSuffix) {
+        if (!payload.accountSuffix) {
           return {
             success: false,
-            error: "Provide reference and account suffix for Abyssinia",
+            error: "Account suffix is required for Abyssinia",
+          };
+        }
+
+        if (!payload.reference && !payload.pdfBuffer) {
+          return {
+            success: false,
+            error: "Provide transaction reference or receipt file",
           };
         }
         break;
+
       case BankType.DASHEN:
         if (!payload.reference && !payload.pdfBuffer) {
           return {

@@ -18,6 +18,8 @@ export interface VerifyResult {
     total?: number | null;
     vat?: number | null;
     serviceFee?: number | null;
+    serviceCharge?: number | null;
+    totalAmount?: number | null;
     reason?: string | null;
   };
   error?: string;
