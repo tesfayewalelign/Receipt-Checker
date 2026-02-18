@@ -14,6 +14,10 @@ export interface VerifyResult {
     amount: number | null;
     date: Date | null;
     reference: string | null;
+    receiptNo?: string | null;
+    total?: number | null;
+    vat?: number | null;
+    serviceFee?: number | null;
     reason?: string | null;
   };
   error?: string;
