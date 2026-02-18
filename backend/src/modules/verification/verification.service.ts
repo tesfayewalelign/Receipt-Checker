@@ -54,6 +54,14 @@ export class VerificationService {
           };
         }
         break;
+      case BankType.MPESA:
+        if (!payload.reference && !payload.pdfBuffer) {
+          return {
+            success: false,
+            error: "Provide transaction reference or receipt file",
+          };
+        }
+        break;
 
       default:
         return {

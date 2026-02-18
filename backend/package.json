@@ -27,6 +27,7 @@
     "pdfjs-dist": "^3.11.174",
     "pg": "^8.18.0",
     "prisma": "^5.22.0",
+    "tesseract.js": "^7.0.0",
     "tough-cookie": "^6.0.0",
     "winston": "^3.19.0"
   },

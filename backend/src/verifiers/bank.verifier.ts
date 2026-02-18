@@ -2,12 +2,14 @@ import { VerifyResult } from "./cbe.verifier";
 import { verifyCBE } from "./cbe.verifier";
 import { verifyTelebirr } from "./telebirr.verifier";
 import { verifyAbyssinia } from "./abyssinia.verifier";
-import { verifyDashen } from "./dashn.verifier";
+import { verifyDashen } from "./dashen.verifier";
+import { verifyMPesa } from "./mpesa.verifier";
 export enum BankType {
   CBE = "CBE",
   TELEBIRR = "TELEBIRR",
   DASHEN = "DASHEN",
   ABYSSINIA = "ABYSSINIA",
+  MPESA = "MPESA",
 }
 
 export async function verifyByBank(
@@ -38,6 +40,12 @@ export async function verifyByBank(
         return { success: false, error: "Reference is required for Dashen" };
       }
       return verifyDashen(payload.reference);
+
+    case BankType.MPESA:
+      if (!payload.reference) {
+        return { success: false, error: "Reference is required for MPESA" };
+      }
+      return verifyMPesa(payload);
 
     default:
       return { success: false, error: `Unsupported bank: ${bank}` };
