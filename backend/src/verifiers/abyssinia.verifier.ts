@@ -66,7 +66,6 @@ export async function fetchSlipPdf(
           const newPage = await target.page();
           if (!newPage) return reject("Failed to open PDF page");
 
-          // Type-safe wait
           await new Promise((r) => setTimeout(r, 1000));
 
           const response: HTTPResponse | null = await newPage.goto(
@@ -74,7 +73,6 @@ export async function fetchSlipPdf(
           );
           if (!response) return reject("Failed to load PDF page");
 
-          // Type-safe arrayBuffer extraction
           const buffer = await response.buffer();
           resolve(buffer);
         } catch (err) {

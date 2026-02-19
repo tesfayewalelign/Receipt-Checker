@@ -4,6 +4,8 @@ import { VerifyResult } from "../../verifiers/cbe.verifier";
 
 export interface VerifyPayload {
   pdfBuffer?: Buffer;
+  fileBuffer?: Buffer;
+  filePath?: string;
   reference?: string;
   accountSuffix?: string;
   fileType?: "pdf" | "image";
@@ -19,7 +21,7 @@ export class VerificationService {
     switch (bank) {
       case BankType.CBE:
         if (
-          !payload.pdfBuffer &&
+          !payload.fileBuffer &&
           (!payload.reference || !payload.accountSuffix)
         ) {
           return {
@@ -63,7 +65,7 @@ export class VerificationService {
         }
         break;
       case BankType.MPESA:
-        if (!payload.reference && !payload.pdfBuffer) {
+        if (!payload.reference && !payload.fileBuffer && !payload.filePath) {
           return {
             success: false,
             error: "Provide transaction reference or receipt file",

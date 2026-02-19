@@ -62,7 +62,7 @@ async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
 }
 
 export async function verifyCBE(payload: {
-  pdfBuffer?: Buffer;
+  fileBuffer?: Buffer;
   reference?: string;
   accountSuffix?: string;
   fileType?: "pdf" | "image";
@@ -74,11 +74,11 @@ export async function verifyCBE(payload: {
 
     let reference = payload.reference;
 
-    if (!reference && payload.pdfBuffer) {
+    if (!reference && payload.fileBuffer) {
       if (payload.fileType === "pdf") {
-        reference = await extractReferenceFromUploadedPdf(payload.pdfBuffer);
+        reference = await extractReferenceFromUploadedPdf(payload.fileBuffer);
       } else {
-        reference = await extractReferenceFromImage(payload.pdfBuffer);
+        reference = await extractReferenceFromImage(payload.fileBuffer);
       }
     }
 

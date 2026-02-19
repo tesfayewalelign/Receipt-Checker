@@ -47,17 +47,12 @@ export class VerificationController {
       let payload: VerifyPayload = {};
 
       if (file) {
-        payload.pdfBuffer = file.buffer!;
+        payload.fileBuffer = file.buffer!; // ← FIXED
         payload.fileType = file.mimetype.includes("pdf") ? "pdf" : "image";
       }
 
-      if (reference !== undefined) {
-        payload.reference = reference;
-      }
-
-      if (accountSuffix !== undefined) {
-        payload.accountSuffix = accountSuffix;
-      }
+      if (reference !== undefined) payload.reference = reference;
+      if (accountSuffix !== undefined) payload.accountSuffix = accountSuffix;
 
       const result = await VerificationService.verifyReceipt(bank, payload);
 

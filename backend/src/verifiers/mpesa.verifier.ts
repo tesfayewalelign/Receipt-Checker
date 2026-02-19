@@ -86,103 +86,124 @@ async function fetchMpesaPdf(reference: string): Promise<Buffer> {
 }
 
 function parseMpesaPdfText(text: string): VerifyResult {
-  const lines = normalizeText(text);
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
 
-  let reference: string | null = null;
-  let receiptNo: string | null = null;
-  let amount: number | null = null;
-  let total: number | null = null;
-  let vat: number | null = null;
-  let serviceFee: number | null = null;
-  let date: Date | null = null;
-  let sender: string | null = null;
-  let senderPhone: string | null = null;
-  let receiverBank: string | null = null;
+  let payer: string | null = null;
+  let payerAccount: string | null = null;
+  let receiver: string | null = null;
   let receiverAccount: string | null = null;
+  let amount: number | null = null;
+  let totalAmount: number | null = null;
+  let serviceCharge: number | null = null;
+  let vat: number | null = null;
+  let date: Date | null = null;
+  let reference: string | null = null;
+  let reason: string | null = null;
 
-  for (const line of lines) {
-    const l = line.trim();
-    if (!sender)
-      sender =
-        l.match(/(?:የላኪ ስም|SENDER NAME)\s*\/?\s*(.+)$/i)?.[1]?.trim() || sender;
-    if (!senderPhone)
-      senderPhone =
-        l
-          .match(/(?:የላኪ ስልክ ቁጥር|SENDER PHONE NUMBER)\s*\/?\s*(251\d{9})/i)?.[1]
-          ?.trim() || senderPhone;
-    if (!receiverBank)
-      receiverBank =
-        l
-          .match(/(?:የተቀባዩ ባንክ ስም|RECEIVER BANK NAME)\s*\/?\s*(.+)$/i)?.[1]
-          ?.trim() || receiverBank;
-    if (!receiverAccount)
-      receiverAccount =
-        l
-          .match(
-            /(?:የባንክ አካውንት ቁጥር|BANK ACCOUNT NUMBER)\s*\/?\s*(\d{6,})/i,
-          )?.[1]
-          ?.trim() || receiverAccount;
-    if (!reference)
-      reference = l.match(/(UBH[A-Z0-9]{6,})/i)?.[1]?.trim() || reference;
-    if (!receiptNo)
-      receiptNo =
-        l
-          .match(/(?:ደረሰኝ ቁጥር|RECEIPT NO)\s*\/?\s*([A-Z0-9]{4,})/i)?.[1]
-          ?.trim() || receiptNo;
-    if (!date)
-      date = l.match(
-        /(?:የክፍያ ቀን|PAYMENT DATE)\s*\/?\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/i,
-      )?.[1]
-        ? new Date(
-            l.match(
-              /(?:የክፍያ ቀን|PAYMENT DATE)\s*\/?\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/,
-            )![1],
+  const fullText = lines.join(" ");
+
+  reference = fullText.match(/UBH[A-Z0-9]{7,}/i)?.[0] || null;
+
+  const dateMatch = fullText.match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+  if (dateMatch) date = new Date(dateMatch[1]);
+
+  const nameLabelMatch = fullText.match(
+    /SENDER NAME\s+([A-Za-z\s]+?)\s+(251\d{9})/i,
+  );
+
+  if (nameLabelMatch) {
+    payer = nameLabelMatch[1].trim();
+    payerAccount = nameLabelMatch[2].trim();
+  } else {
+    const genericNameMatch = fullText.match(
+      /NAME\s+([A-Za-z\s]+?)\s+(251\d{9})/i,
+    );
+
+    if (genericNameMatch) {
+      payer = genericNameMatch[1].trim();
+      payerAccount = genericNameMatch[2].trim();
+    } else {
+      const phoneMatch = fullText.match(/(251\d{9})/);
+      if (phoneMatch) {
+        payerAccount = phoneMatch[1];
+
+        const wordsBefore = fullText
+          .substring(0, phoneMatch.index)
+          .split(/\s+/)
+          .filter(Boolean);
+
+        const candidate = wordsBefore.slice(-5).join(" ");
+
+        const cleaned = candidate
+          .replace(
+            /SENDER|NAME|NUMBER|PHONE|TEL|ACCOUNT|ID|NO|M-PESA|THANK|YOU/gi,
+            "",
           )
-        : date;
-    if (!amount)
-      amount = parseFloat(
-        l
-          .match(/(?:የገንዘብ መጠን|SETTLED AMOUNT)\s*\/?\s*([\d,]+\.\d{2})/i)?.[1]
-          .replace(/,/g, "") || "0",
-      );
-    if (!total)
-      total = parseFloat(
-        l
-          .match(/(?:ጠቅላላ|TOTAL)\s*\/?\s*([\d,]+\.\d{2})/i)?.[1]
-          .replace(/,/g, "") || "0",
-      );
-    if (!vat)
-      vat = parseFloat(
-        l
-          .match(/(?:ተጨማሪ እሴት ታክስ|\+ 15% VAT)\s*\/?\s*([\d,]+\.\d{2})/i)?.[1]
-          .replace(/,/g, "") || "0",
-      );
-    if (!serviceFee)
-      serviceFee = parseFloat(
-        l
-          .match(/(?:የአገልግሎት ክፍያ|SERVICE FEE)\s*\/?\s*([\d,]+\.\d{2})/i)?.[1]
-          .replace(/,/g, "") || "0",
-      );
+          .trim();
+
+        if (/^[A-Za-z]+\s+[A-Za-z]+/.test(cleaned)) {
+          payer = cleaned;
+        } else {
+          payer = "M-PESA User";
+        }
+      }
+    }
   }
+
+  const bankMatch = fullText.match(/Commercial Bank of Ethiopia/i);
+  const accMatch = fullText.match(/(\d{13})/);
+  if (bankMatch) receiver = bankMatch[0];
+  if (accMatch) receiverAccount = accMatch[0];
+
+  const settledMatch =
+    fullText.match(/SETTLED AMOUNT\s+([0-9]+\.[0-9]{2})/i) ||
+    fullText.match(/SETTLED AMOUNT.*?(\d+\.\d{2})/i);
+
+  if (settledMatch) amount = parseFloat(settledMatch[1]);
+
+  const serviceFeeMatch = fullText.match(
+    /SERVICE FEE\s+([0-9]+(?:\.[0-9]{1,2})?)/i,
+  );
+
+  if (serviceFeeMatch) serviceCharge = parseFloat(serviceFeeMatch[1]);
+
+  const vatMatch = fullText.match(/VAT\s+([0-9]+(?:\.[0-9]{1,2})?)/i);
+
+  if (vatMatch) vat = parseFloat(vatMatch[1]);
+
+  const totalMatch = fullText.match(
+    /TOTAL\s*(?:AMOUNT)?\s*([0-9]+\.[0-9]{2})/i,
+  );
+  if (totalMatch) {
+    totalAmount = parseFloat(totalMatch[1]);
+  } else {
+    const lastAmount = fullText.match(/(\d+\.\d{2})\s+THANK YOU/i);
+    if (lastAmount) totalAmount = parseFloat(lastAmount[1]);
+  }
+
+  const reasonMatch = fullText.match(/PAYMENT REASON\s+(\w+)/i);
+  if (reasonMatch) reason = reasonMatch[1];
 
   return {
     success: true,
     data: {
-      payer: sender,
-      payerAccount: senderPhone,
-      receiver: receiverBank,
+      payer,
+      payerAccount,
+      receiver,
       receiverAccount,
       amount,
       date,
       reference,
-      receiptNo,
-      total,
+      reason,
+      serviceCharge,
       vat,
-      serviceFee,
+      totalAmount,
     },
   };
 }
-
 export async function verifyMPesa(input: {
   reference?: string;
   fileBuffer?: Buffer;
