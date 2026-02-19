@@ -48,10 +48,10 @@ export async function verifyByBank(
       });
 
     case BankType.DASHEN:
-      if (!payload.reference) {
+      if (!payload.reference && !payload.fileBuffer && !payload.filePath) {
         return { success: false, error: "Reference is required for Dashen" };
       }
-      return verifyDashen(payload.reference);
+      return verifyDashen(payload);
 
     case BankType.MPESA:
       if (!payload.reference && !payload.fileBuffer && !payload.filePath) {

@@ -57,7 +57,7 @@ export class VerificationService {
         break;
 
       case BankType.DASHEN:
-        if (!payload.reference && !payload.pdfBuffer) {
+        if (!payload.reference && !payload.fileBuffer && !payload.filePath) {
           return {
             success: false,
             error: "Provide transaction reference or receipt file",

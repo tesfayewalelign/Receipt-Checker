@@ -1,7 +1,12 @@
+import fs from "fs";
+import path from "path";
 import axios, { AxiosResponse } from "axios";
-import pdf from "pdf-parse";
+
+import Tesseract from "tesseract.js";
 import https from "https";
 import logger from "../utils/logger";
+
+const pdf = require("pdf-parse");
 
 export interface DashenVerifyResult {
   success: boolean;
@@ -33,32 +38,77 @@ function titleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export async function verifyDashen(
-  transactionReference: string,
-): Promise<DashenVerifyResult> {
-  const url = `https://receipt.dashensuperapp.com/receipt/${transactionReference}`;
-  const httpsAgent = new https.Agent({ rejectUnauthorized: false });
-
+async function extractTransactionReference(
+  fileBuffer: Buffer,
+  fileType: "pdf" | "image",
+): Promise<string | null> {
   try {
+    let text = "";
+    if (fileType === "pdf") {
+      const parsed = await pdf(fileBuffer);
+      text = parsed.text;
+    } else {
+      const result = await Tesseract.recognize(fileBuffer, "eng", {
+        logger: (m) => logger.info(m),
+      });
+      text = result.data.text;
+    }
+    const match = text.match(/[A-Z0-9]{10,}/i);
+    return match ? match[0].toUpperCase() : null;
+  } catch (err: any) {
+    logger.error("❌ Failed to extract transaction reference:", err.message);
+    return null;
+  }
+}
+
+export async function verifyDashen(input: {
+  filePath?: string;
+  fileBuffer?: Buffer;
+  fileType?: "pdf" | "image";
+}): Promise<DashenVerifyResult> {
+  try {
+    let buffer: Buffer;
+    let type: "pdf" | "image";
+
+    if (input.fileBuffer) {
+      buffer = input.fileBuffer;
+      type = input.fileType || "pdf";
+    } else if (input.filePath) {
+      if (!fs.existsSync(input.filePath))
+        throw new Error("File path does not exist");
+      buffer = fs.readFileSync(input.filePath);
+      type =
+        path.extname(input.filePath).toLowerCase() === ".pdf" ? "pdf" : "image";
+    } else {
+      return { success: false, error: "No file provided" };
+    }
+
+    const transactionReference = await extractTransactionReference(
+      buffer,
+      type,
+    );
+    if (!transactionReference)
+      return {
+        success: false,
+        error: "Could not extract transaction reference from file",
+      };
+
+    const url = `https://receipt.dashensuperapp.com/receipt/${transactionReference}`;
+    const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
     logger.info(`🔎 Fetching Dashen receipt: ${url}`);
     const response: AxiosResponse<ArrayBuffer> = await axios.get(url, {
       httpsAgent,
       responseType: "arraybuffer",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        Accept: "application/pdf",
-      },
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/pdf" },
       timeout: 30000,
     });
 
     logger.info("✅ Dashen receipt fetched, parsing PDF...");
     return await parseDashenReceipt(response.data);
   } catch (err: any) {
-    logger.error("❌ Dashen receipt fetch failed:", err.message);
-    return {
-      success: false,
-      error: `Failed to fetch receipt: ${err.message}`,
-    };
+    logger.error("❌ Dashen verification failed:", err.message);
+    return { success: false, error: err.message };
   }
 }
 
