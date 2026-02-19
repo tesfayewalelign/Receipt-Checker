@@ -1,7 +1,6 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 import fs from "fs";
-import path from "path";
-import puppeteer, { Browser, Page, HTTPResponse } from "puppeteer";
+import puppeteer from "puppeteer";
 
 export interface VerifyResult {
   success: boolean;
@@ -33,7 +32,7 @@ function extractReference(text: string): string | null {
 }
 
 async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
-  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
   let fullText = "";
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
@@ -48,55 +47,33 @@ export async function fetchSlipPdf(
   accountSuffix: string,
 ): Promise<Buffer> {
   const url = `https://cs.bankofabyssinia.com/slip/?trx=${reference}${accountSuffix}`;
-  let browser: Browser | null = null;
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox"],
+  });
+  const page = await browser.newPage();
+  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
-  try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+  await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+  await page.waitForSelector("table", { timeout: 15000 });
 
-    const page: Page = await browser.newPage();
-    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-
-    const pdfBuffer: Buffer = await new Promise(async (resolve, reject) => {
-      browser!.once("targetcreated", async (target) => {
-        try {
-          const newPage = await target.page();
-          if (!newPage) return reject("Failed to open PDF page");
-
-          await new Promise((r) => setTimeout(r, 1000));
-
-          const response: HTTPResponse | null = await newPage.goto(
-            newPage.url(),
-          );
-          if (!response) return reject("Failed to load PDF page");
-
-          const buffer = await response.buffer();
-          resolve(buffer);
-        } catch (err) {
-          reject(err);
-        }
-      });
-
-      const clicked = await page.evaluate(() => {
-        const btn = Array.from(document.querySelectorAll("button")).find((b) =>
-          b.textContent?.includes("Download PDF"),
-        );
-        if (!btn) return false;
-        (btn as HTMLButtonElement).click();
-        return true;
-      });
-
-      if (!clicked) reject("Download PDF button not found");
-    });
-
-    return pdfBuffer;
-  } finally {
-    if (browser) await browser.close();
-  }
+  const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+  await browser.close();
+  return Buffer.from(pdfBuffer);
 }
+function parseTransactionDate(raw: string | null): Date | null {
+  if (!raw) return null;
+  const match = raw.match(/(\d{2})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})/);
+  if (!match) return null;
+  const [_, yy, mm, dd, hh, min] = match;
+  const year = 2000 + parseInt(yy, 10);
+  const month = parseInt(mm, 10) - 1;
+  const day = parseInt(dd, 10);
+  const hour = parseInt(hh, 10);
+  const minute = parseInt(min, 10);
+  return new Date(year, month, day, hour, minute);
+}
+
 function parseSlip(text: string): VerifyResult {
   if (!text || text.length < 30) {
     return {
@@ -105,22 +82,30 @@ function parseSlip(text: string): VerifyResult {
     };
   }
 
-  const reference = extractReference(text);
+  const reference =
+    text.match(/Transaction Reference\s+([A-Z0-9]+)/i)?.[1] || null;
 
   const sourceAccount = text.match(/Source Account\s+([\w*]+)/i)?.[1] || null;
+
   const sourceAccountName =
     text.match(/Source Account Name\s+(.+?)\s+(Transferred|Service)/i)?.[1] ||
     null;
+
   const transferredAmountRaw =
     text.match(/Transferred amount\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
+
   const serviceChargeRaw =
     text.match(/Service Charge\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
+
   const vatRaw = text.match(/VAT\(15%\)\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
+
   const totalAmountRaw =
     text.match(/Total Amount\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
+
   const transactionType =
     text.match(/Transaction Type\s+(.+?)\s+(Transaction Date)/i)?.[1]?.trim() ||
     null;
+
   const transactionDateRaw =
     text.match(/Transaction Date\s+([\d\/:\s]+)/i)?.[1] || null;
 
@@ -134,8 +119,8 @@ function parseSlip(text: string): VerifyResult {
       amount: transferredAmountRaw
         ? parseFloat(transferredAmountRaw.replace(/,/g, ""))
         : null,
-      date: transactionDateRaw ? new Date(transactionDateRaw.trim()) : null,
-      reference: reference,
+      date: parseTransactionDate(transactionDateRaw),
+      reference,
       reason: transactionType,
       serviceCharge: serviceChargeRaw
         ? parseFloat(serviceChargeRaw.replace(/,/g, ""))
@@ -154,31 +139,26 @@ export async function verifyAbyssinia(input: {
   filePath?: string;
 }): Promise<VerifyResult> {
   try {
-    let finalReference = input.reference;
-    const accountSuffix = input.accountSuffix;
-
-    if (!accountSuffix && !input.filePath)
+    if (!input.accountSuffix && !input.filePath) {
       return {
         success: false,
         error: "Account suffix is required if no filePath provided",
       };
+    }
 
     let pdfBuffer: Buffer;
 
     if (input.filePath) {
-      if (!fs.existsSync(input.filePath)) {
+      if (!fs.existsSync(input.filePath))
         return { success: false, error: "File path does not exist" };
-      }
       pdfBuffer = fs.readFileSync(input.filePath);
     } else {
-      if (!finalReference)
+      if (!input.reference)
         return { success: false, error: "Transaction reference is required" };
-      pdfBuffer = await fetchSlipPdf(finalReference, accountSuffix!);
+      pdfBuffer = await fetchSlipPdf(input.reference, input.accountSuffix!);
     }
 
     const pdfText = await extractTextFromPdfBuffer(pdfBuffer);
-    console.log("SLIP PDF TEXT:", pdfText);
-
     return parseSlip(pdfText);
   } catch (err: any) {
     return {

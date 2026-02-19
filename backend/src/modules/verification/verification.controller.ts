@@ -47,7 +47,7 @@ export class VerificationController {
       let payload: VerifyPayload = {};
 
       if (file) {
-        payload.fileBuffer = file.buffer!; // ← FIXED
+        payload.fileBuffer = file.buffer!;
         payload.fileType = file.mimetype.includes("pdf") ? "pdf" : "image";
       }
 
