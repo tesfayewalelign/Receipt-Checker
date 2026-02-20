@@ -1,6 +1,7 @@
 import puppeteer, { Browser, HTTPResponse } from "puppeteer";
 import axios from "axios";
 import https from "https";
+import Tesseract from "tesseract.js";
 
 const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
 
@@ -58,7 +59,20 @@ async function extractReferenceFromUploadedPdf(
 }
 
 async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
-  throw new Error("Image OCR not implemented yet");
+  const result = await Tesseract.recognize(buffer, "eng", {
+    logger: (m) => {
+      if (m.status === "recognizing text") {
+        console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+      }
+    },
+  });
+
+  const text = result.data.text.replace(/\s+/g, " ");
+  const reference = text.match(
+    /Reference\s+No\.?\s*\(VAT\s+Invoice\s+No\)\s+([A-Z0-9]+)/i,
+  )?.[1];
+  if (!reference) throw new Error("Reference not found in image");
+  return reference;
 }
 
 export async function verifyCBE(payload: {

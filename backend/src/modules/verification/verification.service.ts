@@ -41,17 +41,29 @@ export class VerificationService {
         break;
 
       case BankType.ABYSSINIA:
-        if (!payload.accountSuffix) {
+        if (
+          !payload.accountSuffix &&
+          !payload.filePath &&
+          !payload.fileBuffer
+        ) {
           return {
             success: false,
-            error: "Account suffix is required for Abyssinia",
+            error:
+              "Account suffix is required for Abyssinia if no file is provided",
           };
         }
 
-        if (!payload.reference && !payload.pdfBuffer) {
+        if (!payload.reference && !payload.fileBuffer && !payload.filePath) {
           return {
             success: false,
-            error: "Provide transaction reference or receipt file",
+            error: "Provide transaction reference or receipt file (PDF/image)",
+          };
+        }
+
+        if (payload.fileBuffer && !payload.fileType) {
+          return {
+            success: false,
+            error: "File type must be specified (pdf or image)",
           };
         }
         break;

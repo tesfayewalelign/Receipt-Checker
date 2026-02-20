@@ -27,7 +27,7 @@ export async function verifyByBank(
       return verifyTelebirr(payload.reference);
 
     case BankType.ABYSSINIA:
-      if (!payload.accountSuffix) {
+      if (!payload.accountSuffix && !payload.filePath && !payload.fileBuffer) {
         return {
           success: false,
           error: "Account suffix is required for Abyssinia",
