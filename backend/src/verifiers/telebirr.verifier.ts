@@ -7,13 +7,11 @@ export interface TelebirrReceipt {
   reference: string;
   receiptNo: string;
   amount: number;
-  serviceFee?: number;
-  vat?: number;
   totalPaid?: number;
   payer?: string;
   receiver?: string;
   status: string;
-  date: string;
+  date: Date;
 }
 
 export class TelebirrVerifier {
@@ -21,62 +19,41 @@ export class TelebirrVerifier {
 
   async verify(reference: string): Promise<TelebirrReceipt | null> {
     try {
-      logger.info(`Starting Telebirr verification for reference: ${reference}`);
+      logger.info(`Telebirr verification started: ${reference}`);
 
       const html = await this.fetchReceipt(reference);
-      if (!html) {
-        logger.warn(`Failed to fetch receipt HTML for reference: ${reference}`);
-        return null;
-      }
-      logger.debug("Fetched Telebirr HTML:", html.slice(0, 1000));
+      if (!html) return null;
 
       if (html.includes("This request is not correct")) {
-        logger.warn(`Invalid reference or blocked request: ${reference}`);
+        logger.warn("Invalid Telebirr reference");
         return null;
       }
 
       const parsed = this.parseReceipt(html, reference);
-      if (!parsed) {
-        logger.warn(`Failed to parse receipt data for reference: ${reference}`);
-        return null;
-      }
-      logger.debug("Parsed Telebirr receipt:", parsed);
+      if (!parsed) return null;
 
-      if (!this.validateReceipt(parsed)) {
-        logger.warn(`Receipt validation failed for reference: ${reference}`);
-        return null;
-      }
+      if (!this.validateReceipt(parsed)) return null;
 
-      logger.info(`Telebirr verification SUCCESS for reference: ${reference}`);
+      logger.info(`Telebirr verification SUCCESS: ${reference}`);
       return parsed;
     } catch (error: any) {
-      logger.error(
-        `Telebirr verification error for reference ${reference}:`,
-        error.message,
-      );
+      logger.error("Telebirr verification error:", error.message);
       return null;
     }
   }
 
   private async fetchReceipt(reference: string): Promise<string | null> {
     try {
-      const url = `${this.BASE_URL}/${reference}`;
-      const response = await axios.get(url, {
-        timeout: 10000,
+      const response = await axios.get(`${this.BASE_URL}/${reference}`, {
+        timeout: 15000,
         headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          Referer: "https://transactioninfo.ethiotelecom.et/",
-          Connection: "keep-alive",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         },
       });
+
       return response.data;
     } catch (error: any) {
-      logger.warn(
-        `Failed to fetch Telebirr receipt for ${reference}: ${error.message}`,
-      );
+      logger.error("Failed to fetch Telebirr receipt:", error.message);
       return null;
     }
   }
@@ -88,67 +65,104 @@ export class TelebirrVerifier {
     try {
       const $ = cheerio.load(html);
 
-      const getText = (label: string): string | undefined => {
-        const regex = new RegExp(`${label}\\s*:?\\s*([^<\\n]+)`, "i");
-        const match = html.match(regex);
-        if (match) return match[1].trim();
+      let payer: string | undefined;
+      $("td").each((_, el) => {
+        const text = $(el).text().trim();
+        if (text.includes("Payer Name")) {
+          payer = $(el).next("td").text().trim();
+        }
+      });
 
-        const td = $(`td:contains('${label}')`).next();
-        if (td) return td.text().trim();
+      let receiver: string | undefined;
+      $("td").each((_, el) => {
+        const text = $(el).text().trim();
+        if (text.includes("Credited Party name")) {
+          receiver = $(el).next("td").text().trim();
+        }
+      });
 
-        return undefined;
-      };
+      let status: string | undefined;
+      $("td").each((_, el) => {
+        const text = $(el).text().trim();
+        if (text.toLowerCase().includes("transaction status")) {
+          status = $(el).next("td").text().trim();
+        }
+      });
 
-      const amountStr = getText("Amount");
-      const status = getText("Status");
-      const receiptNo = getText("Receipt No") || getText("Receipt");
-      const date = getText("Date");
-      const payer = getText("Payer Name");
-      const receiver = getText("Credited Party name");
+      let receiptNo: string | undefined;
+      let dateStr: string | undefined;
+      let amountStr: string | undefined;
 
-      if (!amountStr || !status || !receiptNo || !date) return null;
+      $("table").each((_, table) => {
+        const rows = $(table).find("tr");
+        rows.each((i, row) => {
+          const cols = $(row).find("td");
+
+          if (cols.length >= 3) {
+            const invoice = $(cols[0]).text().trim();
+            const date = $(cols[1]).text().trim();
+            const amount = $(cols[2]).text().trim();
+
+            if (invoice && date && amount && invoice === reference) {
+              receiptNo = invoice;
+              dateStr = date;
+              amountStr = amount;
+            }
+          }
+        });
+      });
+
+      if (!receiptNo || !dateStr || !amountStr || !status) {
+        logger.warn("Missing required Telebirr fields");
+        return null;
+      }
 
       const amount = parseFloat(amountStr.replace(/[^\d.]/g, ""));
+
       if (isNaN(amount)) return null;
+
+      const [day, month, yearTime] = dateStr.split("-");
+      const [year, time] = yearTime.split(" ");
+      const formattedDate = new Date(`${year}-${month}-${day}T${time}`);
+
+      if (isNaN(formattedDate.getTime())) {
+        logger.warn("Invalid date format:", dateStr);
+        return null;
+      }
 
       return {
         reference,
         receiptNo,
         amount,
-        status,
-        date,
+        totalPaid: amount,
         payer,
         receiver,
+        status,
+        date: formattedDate,
       };
     } catch (error: any) {
-      logger.error("Error parsing Telebirr receipt HTML:", error.message);
+      logger.error("Telebirr parse error:", error.message);
       return null;
     }
   }
 
   private validateReceipt(receipt: TelebirrReceipt): boolean {
-    if (!receipt.reference) {
-      logger.warn("Validation failed: missing reference");
+    if (!receipt.reference) return false;
+    if (!receipt.amount || receipt.amount <= 0) return false;
+
+    const validStatus = ["success", "paid", "complete"];
+    const statusOk = validStatus.some((word) =>
+      receipt.status.toLowerCase().includes(word),
+    );
+
+    if (!statusOk) {
+      logger.warn("Invalid Telebirr status:", receipt.status);
       return false;
     }
-    if (!receipt.amount || receipt.amount <= 0) {
-      logger.warn("Validation failed: invalid amount");
-      return false;
-    }
-    if (!receipt.status || !/SUCCESS|PAID|COMPLETED/i.test(receipt.status)) {
-      logger.warn(
-        `Validation failed: status is not successful (${receipt.status})`,
-      );
-      return false;
-    }
-    if (!receipt.date) {
-      logger.warn("Validation failed: missing date");
-      return false;
-    }
-    if (!receipt.receiptNo) {
-      logger.warn("Validation failed: missing receipt number");
-      return false;
-    }
+
+    if (!receipt.receiptNo) return false;
+    if (!receipt.date) return false;
+
     return true;
   }
 }
@@ -158,14 +172,12 @@ export async function verifyTelebirr(reference: string): Promise<VerifyResult> {
   const receipt = await verifier.verify(reference);
 
   if (!receipt) {
-    logger.error(`Telebirr verification failed for reference: ${reference}`);
     return {
       success: false,
       error: "Telebirr verification failed",
     };
   }
 
-  logger.info(`Telebirr verification completed for reference: ${reference}`);
   return {
     success: true,
     data: {
@@ -174,7 +186,7 @@ export async function verifyTelebirr(reference: string): Promise<VerifyResult> {
       receiver: receipt.receiver || "",
       receiverAccount: "",
       amount: receipt.amount,
-      date: new Date(receipt.date),
+      date: receipt.date,
       reference: receipt.reference,
       reason: undefined,
     },
