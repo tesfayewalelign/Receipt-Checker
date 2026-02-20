@@ -4,12 +4,14 @@ import { verifyTelebirr } from "./telebirr.verifier";
 import { verifyAbyssinia } from "./abyssinia.verifier";
 import { verifyDashen } from "./dashen.verifier";
 import { verifyMPesa } from "./mpesa.verifier";
+import { verifyAwash } from "./awash.verifier";
 export enum BankType {
   CBE = "CBE",
   TELEBIRR = "TELEBIRR",
   DASHEN = "DASHEN",
   ABYSSINIA = "ABYSSINIA",
   MPESA = "MPESA",
+  AWASH = "AWASH",
 }
 
 export async function verifyByBank(
@@ -48,10 +50,19 @@ export async function verifyByBank(
       });
 
     case BankType.DASHEN:
-      if (!payload.reference && !payload.fileBuffer && !payload.filePath) {
-        return { success: false, error: "Reference is required for Dashen" };
-      }
-      return verifyDashen(payload);
+      return await verifyDashen({
+        reference: payload.reference,
+        fileBuffer: payload.fileBuffer,
+        filePath: payload.filePath,
+        fileType: payload.fileType,
+      });
+    case BankType.AWASH:
+      return await verifyAwash({
+        reference: payload.reference,
+        fileBuffer: payload.fileBuffer,
+        filePath: payload.filePath,
+        fileType: payload.fileType,
+      });
 
     case BankType.MPESA:
       if (!payload.reference && !payload.fileBuffer && !payload.filePath) {

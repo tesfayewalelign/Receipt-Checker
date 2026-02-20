@@ -1,6 +1,8 @@
 import logger from "../../utils/logger";
+import { verifyAwash } from "../../verifiers/awash.verifier";
 import { BankType, verifyByBank } from "../../verifiers/bank.verifier";
 import { VerifyResult } from "../../verifiers/cbe.verifier";
+import { verifyDashen } from "../../verifiers/dashen.verifier";
 
 export interface VerifyPayload {
   pdfBuffer?: Buffer;
@@ -68,14 +70,34 @@ export class VerificationService {
         }
         break;
 
-      case BankType.DASHEN:
-        if (!payload.reference && !payload.fileBuffer && !payload.filePath) {
+      case BankType.DASHEN: {
+        const hasReference = !!payload.reference?.trim();
+        const hasFile = !!payload.fileBuffer || !!payload.filePath;
+
+        if (!hasReference && !hasFile) {
           return {
             success: false,
             error: "Provide transaction reference or receipt file",
           };
         }
-        break;
+
+        return await verifyDashen(payload);
+      }
+
+      case BankType.AWASH: {
+        const hasReference = !!payload.reference?.trim();
+        const hasFile = !!payload.fileBuffer || !!payload.filePath;
+
+        if (!hasReference && !hasFile) {
+          return {
+            success: false,
+            error: "Provide transaction reference or receipt file",
+          };
+        }
+
+        return await verifyAwash(payload);
+      }
+
       case BankType.MPESA:
         if (!payload.reference && !payload.fileBuffer && !payload.filePath) {
           return {
