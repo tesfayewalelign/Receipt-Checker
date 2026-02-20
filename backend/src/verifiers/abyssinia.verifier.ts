@@ -1,6 +1,7 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 import fs from "fs";
 import puppeteer from "puppeteer";
+import Tesseract from "tesseract.js";
 
 export interface VerifyResult {
   success: boolean;
@@ -42,6 +43,20 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
   return clean(fullText);
 }
 
+async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
+  const result = await Tesseract.recognize(buffer, "eng", {
+    logger: (m) => {
+      if (m.status === "recognizing text") {
+        console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+      }
+    },
+  });
+  const text = clean(result.data.text);
+  const reference = extractReference(text);
+  if (!reference) throw new Error("Reference not found in uploaded image");
+  return reference;
+}
+
 export async function fetchSlipPdf(
   reference: string,
   accountSuffix: string,
@@ -53,14 +68,13 @@ export async function fetchSlipPdf(
   });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-
   await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
   await page.waitForSelector("table", { timeout: 15000 });
-
   const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
   await browser.close();
   return Buffer.from(pdfBuffer);
 }
+
 function parseTransactionDate(raw: string | null): Date | null {
   if (!raw) return null;
   const match = raw.match(/(\d{2})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})/);
@@ -84,28 +98,20 @@ function parseSlip(text: string): VerifyResult {
 
   const reference =
     text.match(/Transaction Reference\s+([A-Z0-9]+)/i)?.[1] || null;
-
   const sourceAccount = text.match(/Source Account\s+([\w*]+)/i)?.[1] || null;
-
   const sourceAccountName =
     text.match(/Source Account Name\s+(.+?)\s+(Transferred|Service)/i)?.[1] ||
     null;
-
   const transferredAmountRaw =
     text.match(/Transferred amount\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
-
   const serviceChargeRaw =
     text.match(/Service Charge\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
-
   const vatRaw = text.match(/VAT\(15%\)\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
-
   const totalAmountRaw =
     text.match(/Total Amount\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
-
   const transactionType =
     text.match(/Transaction Type\s+(.+?)\s+(Transaction Date)/i)?.[1]?.trim() ||
     null;
-
   const transactionDateRaw =
     text.match(/Transaction Date\s+([\d\/:\s]+)/i)?.[1] || null;
 
@@ -137,25 +143,47 @@ export async function verifyAbyssinia(input: {
   reference?: string;
   accountSuffix?: string;
   filePath?: string;
+  fileBuffer?: Buffer;
+  fileType?: "pdf" | "image";
 }): Promise<VerifyResult> {
   try {
-    if (!input.accountSuffix && !input.filePath) {
-      return {
-        success: false,
-        error: "Account suffix is required if no filePath provided",
-      };
+    if (!input.accountSuffix && !input.filePath && !input.fileBuffer) {
+      return { success: false, error: "Account suffix is required" };
     }
 
+    let reference: string | undefined = input.reference;
     let pdfBuffer: Buffer;
 
-    if (input.filePath) {
+    if (input.fileBuffer) {
+      if (!input.fileType)
+        return { success: false, error: "fileType must be specified" };
+
+      if (input.fileType === "pdf") {
+        const text = await extractTextFromPdfBuffer(input.fileBuffer);
+        reference = extractReference(text) ?? undefined;
+        if (!reference) throw new Error("Reference not found in uploaded PDF");
+
+        pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix!);
+      } else if (input.fileType === "image") {
+        reference = await extractReferenceFromImage(input.fileBuffer);
+        pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix!);
+      } else {
+        return { success: false, error: "Unsupported fileType" };
+      }
+    } else if (input.filePath) {
       if (!fs.existsSync(input.filePath))
         return { success: false, error: "File path does not exist" };
+
       pdfBuffer = fs.readFileSync(input.filePath);
+      const text = await extractTextFromPdfBuffer(pdfBuffer);
+      reference = extractReference(text) ?? undefined;
+      if (!reference) throw new Error("Reference not found in uploaded PDF");
+
+      pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix!);
     } else {
-      if (!input.reference)
+      if (!reference)
         return { success: false, error: "Transaction reference is required" };
-      pdfBuffer = await fetchSlipPdf(input.reference, input.accountSuffix!);
+      pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix!);
     }
 
     const pdfText = await extractTextFromPdfBuffer(pdfBuffer);

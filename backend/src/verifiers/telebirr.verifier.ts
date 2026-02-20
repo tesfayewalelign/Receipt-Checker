@@ -2,6 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import logger from "../utils/logger";
 import { VerifyResult } from "./cbe.verifier";
+import Tesseract from "tesseract.js";
 
 export interface TelebirrReceipt {
   reference: string;
@@ -12,6 +13,29 @@ export interface TelebirrReceipt {
   receiver?: string;
   status: string;
   date: Date;
+}
+
+async function extractReferenceFromPdfBuffer(buffer: Buffer): Promise<string> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.js");
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+  let fullText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    fullText += content.items.map((i: any) => i.str).join(" ") + " ";
+  }
+  // Match Telebirr reference pattern (adjust regex if needed)
+  const match = fullText.match(/DB[A-Z0-9]{8}/i);
+  if (!match) throw new Error("Reference not found in PDF");
+  return match[0].toUpperCase();
+}
+
+async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
+  const result = await Tesseract.recognize(buffer, "eng");
+  const text = result.data.text;
+  const match = text.match(/DB[A-Z0-9]{8}/i); // Telebirr reference pattern
+  if (!match) throw new Error("Reference not found in image");
+  return match[0].toUpperCase();
 }
 
 export class TelebirrVerifier {
