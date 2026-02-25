@@ -56,13 +56,18 @@ export async function verifyByBank(
         filePath: payload.filePath,
         fileType: payload.fileType,
       });
-    case BankType.AWASH:
-      return await verifyAwash({
-        reference: payload.reference,
-        fileBuffer: payload.fileBuffer,
-        filePath: payload.filePath,
-        fileType: payload.fileType,
-      });
+    case BankType.AWASH: {
+      const reference = payload.reference?.trim();
+
+      if (!reference) {
+        return {
+          success: false,
+          error: "Transaction reference is required for Awash Bank",
+        };
+      }
+
+      return await verifyAwash({ reference });
+    }
 
     case BankType.MPESA:
       if (!payload.reference && !payload.fileBuffer && !payload.filePath) {

@@ -85,17 +85,16 @@ export class VerificationService {
       }
 
       case BankType.AWASH: {
-        const hasReference = !!payload.reference?.trim();
-        const hasFile = !!payload.fileBuffer || !!payload.filePath;
+        const reference = payload.reference?.trim();
 
-        if (!hasReference && !hasFile) {
+        if (!reference) {
           return {
             success: false,
-            error: "Provide transaction reference or receipt file",
+            error: "Transaction reference is required for Awash Bank",
           };
         }
 
-        return await verifyAwash(payload);
+        return await verifyAwash({ reference });
       }
 
       case BankType.MPESA:
