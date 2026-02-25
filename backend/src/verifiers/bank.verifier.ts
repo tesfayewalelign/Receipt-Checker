@@ -5,6 +5,7 @@ import { verifyAbyssinia } from "./abyssinia.verifier";
 import { verifyDashen } from "./dashen.verifier";
 import { verifyMPesa } from "./mpesa.verifier";
 import { verifyAwash } from "./awash.verifier";
+import { verifyCBEBirr } from "./cbebirr.verifier";
 export enum BankType {
   CBE = "CBE",
   TELEBIRR = "TELEBIRR",
@@ -12,6 +13,7 @@ export enum BankType {
   ABYSSINIA = "ABYSSINIA",
   MPESA = "MPESA",
   AWASH = "AWASH",
+  CBEBIRR = "CBEBIRR",
 }
 
 export async function verifyByBank(
@@ -67,6 +69,23 @@ export async function verifyByBank(
       }
 
       return await verifyAwash({ reference });
+    }
+    case BankType.CBEBIRR: {
+      const hasReceipt = !!payload.receiptNumber?.trim();
+      const hasPhone = !!payload.phoneNumber?.trim();
+
+      if (!hasReceipt || !hasPhone) {
+        return {
+          success: false,
+          error: "Receipt number and phone number are required for CBEBirr",
+        };
+      }
+
+      return await verifyCBEBirr({
+        receiptNumber: payload.receiptNumber!,
+        phoneNumber: payload.phoneNumber!,
+        apiKey: payload.apiKey!,
+      });
     }
 
     case BankType.MPESA:

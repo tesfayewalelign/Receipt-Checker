@@ -1,6 +1,9 @@
 import axios, { AxiosResponse } from "axios";
-import pdfParse from "pdf-parse";
+import https from "https";
+import pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 import logger from "../utils/logger";
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 export interface CBEBirrVerifyResult {
   success: boolean;
@@ -29,26 +32,26 @@ export async function verifyCBEBirr(input: {
   apiKey: string;
 }): Promise<CBEBirrVerifyResult> {
   try {
-    const { receiptNumber, phoneNumber, apiKey } = input;
+    const { receiptNumber, phoneNumber } = input;
 
-    if (!receiptNumber || !phoneNumber || !apiKey) {
+    if (!receiptNumber || !phoneNumber) {
       return {
         success: false,
-        error: "Receipt number, phone number and API key are required",
+        error: "Receipt number and phone number are required",
       };
     }
 
     const url = `https://cbepay1.cbe.com.et/aureceipt?TID=${receiptNumber}&PH=${phoneNumber}`;
-
     logger.info(`🔎 [CBEBirr] Fetching receipt: ${receiptNumber}`);
 
     const response: AxiosResponse<ArrayBuffer> = await axios.get(url, {
       responseType: "arraybuffer",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer $`,
         "User-Agent": "Mozilla/5.0",
       },
       timeout: 30000,
+      httpsAgent,
     });
 
     if (response.status !== 200) {
@@ -58,37 +61,37 @@ export async function verifyCBEBirr(input: {
       };
     }
 
-    const pdfBuffer = Buffer.from(response.data);
-    const parsed = await pdfParse(pdfBuffer);
+    const buffer = Buffer.from(response.data);
 
-    logger.info("✅ [CBEBirr] PDF fetched successfully. Parsing...");
+    const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+    let fullText = "";
 
-    return parseCBEBirrReceipt(parsed.text);
-  } catch (err: any) {
-    logger.error("❌ [CBEBirr] Verification failed:", err.message);
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map((item: any) => item.str).join(" ");
+      fullText += pageText + "\n";
+    }
 
-    return {
-      success: false,
-      error: err.message || "Verification failed",
-    };
-  }
-}
+    const text = fullText.replace(/\s+/g, " ").trim();
 
-function parseCBEBirrReceipt(pdfText: string): CBEBirrVerifyResult {
-  try {
-    const text = pdfText.replace(/\s+/g, " ").trim();
-
-    const extract = (regex: RegExp): string | null => {
-      const match = text.match(regex);
-      return match?.[1]?.trim() ?? null;
-    };
-
+    const extract = (regex: RegExp): string | null =>
+      text.match(regex)?.[1]?.trim() ?? null;
     const extractAmount = (regex: RegExp): number | null => {
       const match = text.match(regex);
       if (!match?.[1]) return null;
       const num = parseFloat(match[1].replace(/,/g, ""));
       return isNaN(num) ? null : num;
     };
+
+    const receiptLine = text.match(
+      /(CL[A-Z0-9]+)\s+([\d-]+\s+[\d:]+)\s+([\d,]+\.\d{2})/,
+    );
+    const receiptNumberParsed = receiptLine?.[1] ?? null;
+    const transactionDate = receiptLine?.[2] ? new Date(receiptLine[2]) : null;
+    const amount = receiptLine?.[3]
+      ? parseFloat(receiptLine[3].replace(/,/g, ""))
+      : null;
 
     const result: CBEBirrVerifyResult = {
       success: true,
@@ -101,11 +104,9 @@ function parseCBEBirrReceipt(pdfText: string): CBEBirrVerifyResult {
       orderId: extract(/Order\s*ID\s*:?\s*([A-Z0-9]+)/i),
       transactionStatus: extract(/Transaction\s*Status\s*:?\s*(\w+)/i),
       reference: extract(/Reference\s*:?\s*([A-Z0-9\-]+)/i),
-      receiptNumber: extract(/Receipt\s*Number\s*:?\s*([A-Z0-9]+)/i),
-      transactionDate: extract(/Transaction\s*Date\s*:?\s*([\d\-: ]+)/i)
-        ? new Date(extract(/Transaction\s*Date\s*:?\s*([\d\-: ]+)/i)!)
-        : null,
-      amount: extractAmount(/Amount\s*(?:ETB|Birr)?\s*([\d,]+\.?\d*)/i),
+      receiptNumber: receiptNumberParsed,
+      transactionDate,
+      amount,
       paidAmount: extractAmount(
         /Paid\s*Amount\s*(?:ETB|Birr)?\s*([\d,]+\.?\d*)/i,
       ),
@@ -123,19 +124,12 @@ function parseCBEBirrReceipt(pdfText: string): CBEBirrVerifyResult {
     };
 
     if (!result.receiptNumber && !result.amount) {
-      return {
-        success: false,
-        error: "Failed to parse receipt data",
-      };
+      return { success: false, error: "Failed to parse receipt data" };
     }
 
     return result;
   } catch (err: any) {
-    logger.error("❌ [CBEBirr] PDF parsing failed:", err.message);
-
-    return {
-      success: false,
-      error: "Failed to parse receipt PDF",
-    };
+    logger.error("❌ [CBEBirr] Verification failed:", err.message);
+    return { success: false, error: err.message || "Verification failed" };
   }
 }

@@ -22,11 +22,15 @@ type MulterRequest = Request & {
 
 export class VerificationController {
   static async verify(req: Request, res: Response) {
-    const { bank, reference, accountSuffix } = req.body;
+    const {
+      bank,
+      reference,
+      accountSuffix,
+      receiptNumber,
+      phoneNumber,
+      apiKey,
+    } = req.body;
     const file = (req as MulterRequest).file;
-
-    console.log("req.body:", req.body);
-    console.log("req.file:", req.file);
 
     if (!bank) {
       return handleResponse(res, null, "Bank is required", false);
@@ -37,11 +41,6 @@ export class VerificationController {
     if (!Object.values(BankType).includes(normalizedBank as BankType)) {
       return handleResponse(res, null, `Bank ${bank} is not supported`, false);
     }
-    console.log("Bank raw:", bank);
-    console.log("Bank JSON:", JSON.stringify(bank));
-    console.log("Length:", bank.length);
-    console.log("Enum values:", Object.values(BankType));
-    console.log("Includes:", Object.values(BankType).includes(bank));
 
     try {
       let payload: VerifyPayload = {};
@@ -54,7 +53,16 @@ export class VerificationController {
       if (reference !== undefined) payload.reference = reference;
       if (accountSuffix !== undefined) payload.accountSuffix = accountSuffix;
 
-      const result = await VerificationService.verifyReceipt(bank, payload);
+      if (normalizedBank === BankType.CBEBIRR) {
+        payload.receiptNumber = receiptNumber;
+        payload.phoneNumber = phoneNumber;
+        payload.apiKey = apiKey;
+      }
+
+      const result = await VerificationService.verifyReceipt(
+        normalizedBank,
+        payload,
+      );
 
       if (!result.success) {
         return handleResponse(res, result, result.error, false);

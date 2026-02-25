@@ -3,6 +3,7 @@ import { verifyAwash } from "../../verifiers/awash.verifier";
 import { BankType, verifyByBank } from "../../verifiers/bank.verifier";
 import { VerifyResult } from "../../verifiers/cbe.verifier";
 import { verifyDashen } from "../../verifiers/dashen.verifier";
+import { verifyCBEBirr } from "../../verifiers/cbebirr.verifier";
 
 export interface VerifyPayload {
   pdfBuffer?: Buffer;
@@ -11,6 +12,9 @@ export interface VerifyPayload {
   reference?: string;
   accountSuffix?: string;
   fileType?: "pdf" | "image";
+  receiptNumber?: string;
+  phoneNumber?: string;
+  apiKey?: string;
 }
 
 export class VerificationService {
@@ -95,6 +99,23 @@ export class VerificationService {
         }
 
         return await verifyAwash({ reference });
+      }
+      case BankType.CBEBIRR: {
+        const hasReceipt = !!payload.receiptNumber?.trim();
+        const hasPhone = !!payload.phoneNumber?.trim();
+
+        if (!hasReceipt || !hasPhone) {
+          return {
+            success: false,
+            error: "Receipt number and phone number are required",
+          };
+        }
+
+        return await verifyCBEBirr({
+          receiptNumber: payload.receiptNumber!,
+          phoneNumber: payload.phoneNumber!,
+          apiKey: payload.apiKey!,
+        });
       }
 
       case BankType.MPESA:
