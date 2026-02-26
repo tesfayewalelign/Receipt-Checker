@@ -35,7 +35,6 @@ export async function verifyAwash(payload: {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
-    // Wait for at least one info table
     await page.waitForSelector("table.info-table", { timeout: 20000 });
 
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -44,7 +43,6 @@ export async function verifyAwash(payload: {
       const tables = Array.from(document.querySelectorAll("table.info-table"));
       let result: Record<string, string> | null = null;
 
-      // Find the last table that has Transaction ID & Amount
       for (let i = tables.length - 1; i >= 0; i--) {
         const table = tables[i];
         const rows = Array.from(table.querySelectorAll("tr"));
@@ -63,7 +61,6 @@ export async function verifyAwash(payload: {
         }
       }
 
-      // Get stamp image URL
       const img = document.querySelector<HTMLImageElement>("img.stamp");
       const stampUrl = img ? img.src : null;
 

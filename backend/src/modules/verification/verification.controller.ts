@@ -70,7 +70,7 @@ export class VerificationController {
 
       return handleResponse(
         res,
-        result.data,
+        result,
         "Verification completed successfully",
         true,
       );
