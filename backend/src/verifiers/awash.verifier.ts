@@ -14,6 +14,7 @@ export interface AwashVerifyResult {
   reason?: string | null;
   transactionReference?: string | null;
   stampUrl?: string | null;
+  allFields?: Record<string, string>;
   error?: string;
 }
 
@@ -35,37 +36,63 @@ export async function verifyAwash(payload: {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
-    await page.waitForSelector("table.info-table", { timeout: 20000 });
+    await page.waitForSelector("table, .error-message", { timeout: 20000 });
 
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    const data = await page.evaluate(() => {
-      const tables = Array.from(document.querySelectorAll("table.info-table"));
-      let result: Record<string, string> | null = null;
+    let data: { all: Record<string, string>; stampUrl: string | null } | null =
+      null;
+    const maxRetries = 3;
 
-      for (let i = tables.length - 1; i >= 0; i--) {
-        const table = tables[i];
-        const rows = Array.from(table.querySelectorAll("tr"));
-        const temp: Record<string, string> = {};
-        rows.forEach((row) => {
-          const cells = row.querySelectorAll("td");
-          if (cells.length >= 3) {
-            const label = cells[0].innerText.trim().replace(/[\r\n]/g, "");
-            const value = cells[2].innerText.trim().replace(/[\r\n]/g, "");
-            temp[label] = value;
-          }
+    for (let i = 0; i < maxRetries; i++) {
+      data = await page.evaluate(() => {
+        const tables = Array.from(
+          document.querySelectorAll("table"),
+        ) as HTMLElement[];
+        const allFields: Record<string, string> = {};
+
+        tables.forEach((table) => {
+          const rows = Array.from(
+            table.querySelectorAll("tr"),
+          ) as HTMLElement[];
+          rows.forEach((row) => {
+            const cells = Array.from(
+              row.querySelectorAll("td, th"),
+            ) as HTMLElement[];
+            if (cells.length >= 2) {
+              const label =
+                cells[0]?.innerText?.trim().replace(/[\r\n]/g, "") ?? "";
+              const value =
+                cells[cells.length - 1]?.innerText
+                  ?.trim()
+                  .replace(/[\r\n]/g, "") ?? "";
+              if (label) allFields[label] = value;
+            }
+          });
         });
-        if (temp["Transaction ID"] && temp["Amount"]) {
-          result = temp;
-          break;
-        }
-      }
 
-      const img = document.querySelector<HTMLImageElement>("img.stamp");
-      const stampUrl = img ? img.src : null;
+        const img = document.querySelector<HTMLImageElement>("img.stamp");
+        const stampUrl = img ? img.src : null;
 
-      return result ? { result, stampUrl } : null;
-    });
+        return Object.keys(allFields).length > 0
+          ? { all: allFields, stampUrl }
+          : null;
+      });
+
+      if (data) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    const errorMsg = await page
+      .$eval(".error-message", (el) => el.textContent)
+      .catch(() => null);
+    if (errorMsg) {
+      await browser.close();
+      return {
+        success: false,
+        error: `Transaction not found: ${errorMsg.trim()}`,
+      };
+    }
 
     await browser.close();
 
@@ -73,20 +100,45 @@ export async function verifyAwash(payload: {
       return { success: false, error: "Failed to extract receipt data" };
     }
 
+    const r = data.all;
+
+    const labelMap: Record<string, string[]> = {
+      transactionTime: ["Date"],
+      transactionType: ["Trans type"],
+      transactionAmount: ["Amount"],
+      vat: ["VAT", "VAT Reg No", "VAT Reg Date"],
+      senderName: ["Customer Name", "Name"],
+      senderAccountNumber: ["Account No", "Account"],
+      receiverName: ["Recipient", "Receiver Name", "Beneficiary name"],
+      receiverAccountNumber: ["Beneficiary Account", "Account"],
+      beneficiaryBank: ["Beneficiary Bank", "Bank"],
+      reason: ["Reason"],
+      transactionReference: ["Txn Ref", "Transaction ID"],
+    };
+
+    const getMappedValue = (keys: string[]): string | null => {
+      for (const key of keys) {
+        if (r[key]) return r[key];
+      }
+      return null;
+    };
+
     return {
       success: true,
-      transactionTime: data.result["Transaction Time"] || null,
-      transactionType: data.result["Transaction Type"] || null,
-      transactionAmount: data.result["Amount"] || null,
-      vat: data.result["VAT"] || null,
-      senderName: data.result["Sender Name"] || null,
-      senderAccountNumber: data.result["Sender Account"] || null,
-      receiverName: data.result["Beneficiary name"] || null,
-      receiverAccountNumber: data.result["Beneficiary Account"] || null,
-      beneficiaryBank: data.result["Beneficiary Bank"] || null,
-      reason: data.result["Reason"] || null,
-      transactionReference: data.result["Transaction ID"] || payload.reference,
-      stampUrl: data.stampUrl,
+      transactionTime: getMappedValue(labelMap.transactionTime),
+      transactionType: getMappedValue(labelMap.transactionType),
+      transactionAmount: getMappedValue(labelMap.transactionAmount),
+      vat: getMappedValue(labelMap.vat),
+      senderName: getMappedValue(labelMap.senderName),
+      senderAccountNumber: getMappedValue(labelMap.senderAccountNumber),
+      receiverName: getMappedValue(labelMap.receiverName),
+      receiverAccountNumber: getMappedValue(labelMap.receiverAccountNumber),
+      beneficiaryBank: getMappedValue(labelMap.beneficiaryBank),
+      reason: getMappedValue(labelMap.reason),
+      transactionReference:
+        getMappedValue(labelMap.transactionReference) || payload.reference,
+      stampUrl: data.stampUrl || null,
+      allFields: r,
     };
   } catch (error: any) {
     if (browser) await browser.close();
