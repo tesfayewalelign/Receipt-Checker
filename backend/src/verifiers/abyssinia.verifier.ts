@@ -2,6 +2,24 @@ import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 import fs from "fs";
 import puppeteer from "puppeteer";
 import Tesseract from "tesseract.js";
+import { fromBuffer } from "pdf2pic";
+
+async function convertPdfToImage(buffer: Buffer): Promise<Buffer> {
+  const converter = fromBuffer(buffer, {
+    density: 300,
+    format: "png",
+    savePath: "/tmp",
+    saveFilename: "page",
+  });
+
+  const page = await converter(1);
+
+  if (!page.path) {
+    throw new Error("PDF conversion failed");
+  }
+
+  return fs.readFileSync(page.path);
+}
 
 export interface VerifyResult {
   success: boolean;
@@ -147,51 +165,137 @@ export async function verifyAbyssinia(input: {
   fileType?: "pdf" | "image";
 }): Promise<VerifyResult> {
   try {
-    if (!input.accountSuffix && !input.filePath && !input.fileBuffer) {
-      return { success: false, error: "Account suffix is required" };
+    // 1️⃣ accountSuffix is always required
+    if (!input.accountSuffix) {
+      return {
+        success: false,
+        error: "Account suffix is required",
+      };
     }
 
     let reference: string | undefined = input.reference;
-    let pdfBuffer: Buffer;
+    let pdfBuffer: Buffer | undefined;
 
+    // 2️⃣ FILE BUFFER MODE
     if (input.fileBuffer) {
-      if (!input.fileType)
-        return { success: false, error: "fileType must be specified" };
-
-      if (input.fileType === "pdf") {
-        const text = await extractTextFromPdfBuffer(input.fileBuffer);
-        reference = extractReference(text) ?? undefined;
-        if (!reference) throw new Error("Reference not found in uploaded PDF");
-
-        pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix!);
-      } else if (input.fileType === "image") {
-        reference = await extractReferenceFromImage(input.fileBuffer);
-        pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix!);
-      } else {
-        return { success: false, error: "Unsupported fileType" };
+      if (!input.fileType) {
+        return {
+          success: false,
+          error: "fileType must be specified (pdf or image)",
+        };
       }
-    } else if (input.filePath) {
-      if (!fs.existsSync(input.filePath))
-        return { success: false, error: "File path does not exist" };
 
-      pdfBuffer = fs.readFileSync(input.filePath);
-      const text = await extractTextFromPdfBuffer(pdfBuffer);
-      reference = extractReference(text) ?? undefined;
-      if (!reference) throw new Error("Reference not found in uploaded PDF");
+      // ===== PDF FILE =====
+      if (input.fileType === "pdf") {
+        let text = await extractTextFromPdfBuffer(input.fileBuffer);
 
-      pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix!);
-    } else {
-      if (!reference)
-        return { success: false, error: "Transaction reference is required" };
-      pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix!);
+        // 🔥 OCR fallback if no readable text
+        if (!text || text.length < 50) {
+          const imageBuffer = await convertPdfToImage(input.fileBuffer);
+          const ocr = await Tesseract.recognize(imageBuffer, "eng");
+          text = ocr.data.text;
+        }
+
+        reference = extractReference(text) ?? undefined;
+
+        if (!reference) {
+          return {
+            success: false,
+            error: "Reference not found in uploaded PDF",
+          };
+        }
+
+        pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
+      }
+
+      // ===== IMAGE FILE =====
+      else if (input.fileType === "image") {
+        reference = await extractReferenceFromImage(input.fileBuffer);
+
+        if (!reference) {
+          return {
+            success: false,
+            error: "Reference not found in uploaded image",
+          };
+        }
+
+        pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
+      } else {
+        return {
+          success: false,
+          error: "Unsupported fileType",
+        };
+      }
     }
 
+    // 3️⃣ FILE PATH MODE
+    else if (input.filePath) {
+      if (!fs.existsSync(input.filePath)) {
+        return {
+          success: false,
+          error: "File path does not exist",
+        };
+      }
+
+      const uploadedBuffer = fs.readFileSync(input.filePath);
+
+      let text = await extractTextFromPdfBuffer(uploadedBuffer);
+
+      if (!text || text.length < 50) {
+        return {
+          success: false,
+          error:
+            "Uploaded PDF has no readable text layer. Please upload original slip or image file.",
+        };
+      }
+
+      reference = extractReference(text) ?? undefined;
+
+      if (!reference) {
+        return {
+          success: false,
+          error: "Reference not found in uploaded PDF",
+        };
+      }
+
+      pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
+    }
+
+    // 4️⃣ REFERENCE ONLY MODE
+    else {
+      if (!reference) {
+        return {
+          success: false,
+          error: "Transaction reference is required",
+        };
+      }
+
+      pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
+    }
+
+    // 5️⃣ Safety Check (TypeScript-safe)
+    if (!pdfBuffer) {
+      return {
+        success: false,
+        error: "Failed to retrieve slip PDF",
+      };
+    }
+
+    // 6️⃣ Extract and Parse Official Slip
     const pdfText = await extractTextFromPdfBuffer(pdfBuffer);
+
+    if (!pdfText || pdfText.length < 50) {
+      return {
+        success: false,
+        error: "Slip PDF returned empty or invalid content",
+      };
+    }
+
     return parseSlip(pdfText);
   } catch (err: any) {
     return {
       success: false,
-      error: err.message || "Abyssinia verification failed",
+      error: err?.message || "Abyssinia verification failed",
     };
   }
 }

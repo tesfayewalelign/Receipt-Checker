@@ -30,18 +30,18 @@ export async function verifyByBank(
       }
       return verifyTelebirr(payload.reference);
 
-    case BankType.ABYSSINIA:
-      if (!payload.accountSuffix && !payload.filePath && !payload.fileBuffer) {
+    case BankType.ABYSSINIA: {
+      if (!payload.accountSuffix) {
         return {
           success: false,
           error: "Account suffix is required for Abyssinia",
         };
       }
 
-      if (!payload.reference && !payload.pdfBuffer) {
+      if (!payload.reference && !payload.filePath && !payload.fileBuffer) {
         return {
           success: false,
-          error: "Provide transaction reference or receipt file",
+          error: "Provide transaction reference or upload receipt file",
         };
       }
 
@@ -49,7 +49,10 @@ export async function verifyByBank(
         reference: payload.reference,
         accountSuffix: payload.accountSuffix,
         filePath: payload.filePath,
+        fileBuffer: payload.fileBuffer,
+        fileType: payload.fileType,
       });
+    }
 
     case BankType.DASHEN:
       return await verifyDashen({

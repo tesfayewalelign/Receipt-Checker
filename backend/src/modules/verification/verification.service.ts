@@ -46,23 +46,21 @@ export class VerificationService {
         }
         break;
 
-      case BankType.ABYSSINIA:
-        if (
-          !payload.accountSuffix &&
-          !payload.filePath &&
-          !payload.fileBuffer
-        ) {
+      case BankType.ABYSSINIA: {
+        if (!payload.accountSuffix) {
           return {
             success: false,
-            error:
-              "Account suffix is required for Abyssinia if no file is provided",
+            error: "Account suffix is required for Abyssinia",
           };
         }
 
-        if (!payload.reference && !payload.fileBuffer && !payload.filePath) {
+        const hasFile = !!payload.fileBuffer || !!payload.filePath;
+
+        if (!payload.reference && !hasFile) {
           return {
             success: false,
-            error: "Provide transaction reference or receipt file (PDF/image)",
+            error:
+              "Provide transaction reference or upload receipt file (PDF/image)",
           };
         }
 
@@ -72,7 +70,9 @@ export class VerificationService {
             error: "File type must be specified (pdf or image)",
           };
         }
+
         break;
+      }
 
       case BankType.DASHEN: {
         const hasReference = !!payload.reference?.trim();
