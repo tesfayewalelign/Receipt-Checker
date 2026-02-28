@@ -33,7 +33,7 @@ async function extractReferenceFromPdfBuffer(buffer: Buffer): Promise<string> {
 async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
   const result = await Tesseract.recognize(buffer, "eng");
   const text = result.data.text;
-  const match = text.match(/DB[A-Z0-9]{8}/i); // Telebirr reference pattern
+  const match = text.match(/DB[A-Z0-9]{8}/i);
   if (!match) throw new Error("Reference not found in image");
   return match[0].toUpperCase();
 }

@@ -4,9 +4,26 @@ import puppeteer from "puppeteer";
 import Tesseract from "tesseract.js";
 import { fromBuffer } from "pdf2pic";
 
+const clean = (text: string) =>
+  text
+    .replace(/\s+/g, " ")
+    .replace(/\u00A0/g, " ")
+    .trim();
+
+function detectFileType(buffer: Buffer): "pdf" | "image" {
+  return buffer.slice(0, 4).toString() === "%PDF" ? "pdf" : "image";
+}
+
+function validateReference(ref: string): boolean {
+  return /^FT[A-Z0-9]{8,}$/i.test(ref);
+}
+function fixOcrReference(ref: string): string {
+  return ref.replace(/1/g, "T").replace(/0/g, "O").replace(/I/g, "1");
+}
+
 async function convertPdfToImage(buffer: Buffer): Promise<Buffer> {
   const converter = fromBuffer(buffer, {
-    density: 300,
+    density: 600,
     format: "png",
     savePath: "/tmp",
     saveFilename: "page",
@@ -21,58 +38,35 @@ async function convertPdfToImage(buffer: Buffer): Promise<Buffer> {
   return fs.readFileSync(page.path);
 }
 
-export interface VerifyResult {
-  success: boolean;
-  data?: {
-    payer: string | null;
-    payerAccount: string | null;
-    receiver: string | null;
-    receiverAccount: string | null;
-    amount: number | null;
-    date: Date | null;
-    reference: string | null;
-    reason: string | null;
-    serviceCharge?: number | null;
-    vat?: number | null;
-    totalAmount?: number | null;
-  };
-  error?: string;
-}
-
-const clean = (text: string) =>
-  text
-    .replace(/\s+/g, " ")
-    .replace(/\u00A0/g, " ")
-    .trim();
-
-function extractReference(text: string): string | null {
-  const match = text.match(/FT[A-Z0-9]{10,}/i);
-  return match ? match[0].toUpperCase() : null;
-}
-
-async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
+async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
   let fullText = "";
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     fullText += content.items.map((i: any) => i.str).join(" ") + " ";
   }
+
   return clean(fullText);
 }
 
-async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
-  const result = await Tesseract.recognize(buffer, "eng", {
-    logger: (m) => {
-      if (m.status === "recognizing text") {
-        console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
-      }
-    },
-  });
-  const text = clean(result.data.text);
-  const reference = extractReference(text);
-  if (!reference) throw new Error("Reference not found in uploaded image");
-  return reference;
+async function extractTextWithFallback(buffer: Buffer): Promise<string> {
+  let text = await extractTextFromPdf(buffer);
+
+  if (!text || text.length < 50) {
+    const imageBuffer = await convertPdfToImage(buffer);
+    const ocr = await Tesseract.recognize(imageBuffer, "eng");
+    text = ocr.data.text;
+  }
+
+  return clean(text);
+}
+
+function extractReference(text: string): string | null {
+  const match = text.match(/Transaction\s*Reference[:\s]+(FT[A-Z0-9]{8,})/i);
+
+  return match ? match[1].toUpperCase() : null;
 }
 
 export async function fetchSlipPdf(
@@ -80,79 +74,66 @@ export async function fetchSlipPdf(
   accountSuffix: string,
 ): Promise<Buffer> {
   const url = `https://cs.bankofabyssinia.com/slip/?trx=${reference}${accountSuffix}`;
+
   const browser = await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox"],
   });
+
   const page = await browser.newPage();
-  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
   await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-  await page.waitForSelector("table", { timeout: 15000 });
-  const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+
+  const pdfBuffer = await page.pdf({
+    format: "A4",
+    printBackground: true,
+  });
+
   await browser.close();
   return Buffer.from(pdfBuffer);
 }
 
-function parseTransactionDate(raw: string | null): Date | null {
-  if (!raw) return null;
-  const match = raw.match(/(\d{2})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})/);
-  if (!match) return null;
-  const [_, yy, mm, dd, hh, min] = match;
-  const year = 2000 + parseInt(yy, 10);
-  const month = parseInt(mm, 10) - 1;
-  const day = parseInt(dd, 10);
-  const hour = parseInt(hh, 10);
-  const minute = parseInt(min, 10);
-  return new Date(year, month, day, hour, minute);
+export interface VerifyResult {
+  success: boolean;
+  data?: any;
+  error?: string;
 }
 
 function parseSlip(text: string): VerifyResult {
-  if (!text || text.length < 30) {
+  if (!text || text.length < 50) {
     return {
       success: false,
-      error: "Slip PDF returned empty or invalid content",
+      error: "Slip content invalid or empty",
     };
   }
 
   const reference =
     text.match(/Transaction Reference\s+([A-Z0-9]+)/i)?.[1] || null;
-  const sourceAccount = text.match(/Source Account\s+([\w*]+)/i)?.[1] || null;
-  const sourceAccountName =
+
+  const payerAccount = text.match(/Source Account\s+([\w*]+)/i)?.[1] || null;
+
+  const payer =
     text.match(/Source Account Name\s+(.+?)\s+(Transferred|Service)/i)?.[1] ||
     null;
-  const transferredAmountRaw =
+
+  const amountRaw =
     text.match(/Transferred amount\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
-  const serviceChargeRaw =
-    text.match(/Service Charge\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
-  const vatRaw = text.match(/VAT\(15%\)\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
-  const totalAmountRaw =
-    text.match(/Total Amount\s+ETB\s*([\d,]+\.\d{2})/i)?.[1] || null;
-  const transactionType =
-    text.match(/Transaction Type\s+(.+?)\s+(Transaction Date)/i)?.[1]?.trim() ||
-    null;
-  const transactionDateRaw =
-    text.match(/Transaction Date\s+([\d\/:\s]+)/i)?.[1] || null;
+
+  if (!reference || !payerAccount || !amountRaw) {
+    return {
+      success: false,
+      error: "Slip parsing failed — invalid reference or corrupted slip",
+    };
+  }
 
   return {
     success: true,
     data: {
-      payer: sourceAccountName,
-      payerAccount: sourceAccount,
+      payer,
+      payerAccount,
       receiver: null,
       receiverAccount: null,
-      amount: transferredAmountRaw
-        ? parseFloat(transferredAmountRaw.replace(/,/g, ""))
-        : null,
-      date: parseTransactionDate(transactionDateRaw),
+      amount: parseFloat(amountRaw.replace(/,/g, "")),
       reference,
-      reason: transactionType,
-      serviceCharge: serviceChargeRaw
-        ? parseFloat(serviceChargeRaw.replace(/,/g, ""))
-        : null,
-      vat: vatRaw ? parseFloat(vatRaw.replace(/,/g, "")) : null,
-      totalAmount: totalAmountRaw
-        ? parseFloat(totalAmountRaw.replace(/,/g, ""))
-        : null,
     },
   };
 }
@@ -160,138 +141,76 @@ function parseSlip(text: string): VerifyResult {
 export async function verifyAbyssinia(input: {
   reference?: string;
   accountSuffix?: string;
-  filePath?: string;
   fileBuffer?: Buffer;
+  filePath?: string;
   fileType?: "pdf" | "image";
 }): Promise<VerifyResult> {
   try {
-    // 1️⃣ accountSuffix is always required
     if (!input.accountSuffix) {
-      return {
-        success: false,
-        error: "Account suffix is required",
-      };
+      return { success: false, error: "Account suffix is required" };
     }
 
-    let reference: string | undefined = input.reference;
+    let reference = input.reference;
     let pdfBuffer: Buffer | undefined;
 
-    // 2️⃣ FILE BUFFER MODE
     if (input.fileBuffer) {
-      if (!input.fileType) {
-        return {
-          success: false,
-          error: "fileType must be specified (pdf or image)",
-        };
-      }
+      const type = detectFileType(input.fileBuffer);
+      let text = "";
 
-      // ===== PDF FILE =====
-      if (input.fileType === "pdf") {
-        let text = await extractTextFromPdfBuffer(input.fileBuffer);
-
-        // 🔥 OCR fallback if no readable text
-        if (!text || text.length < 50) {
-          const imageBuffer = await convertPdfToImage(input.fileBuffer);
-          const ocr = await Tesseract.recognize(imageBuffer, "eng");
-          text = ocr.data.text;
-        }
-
-        reference = extractReference(text) ?? undefined;
-
-        if (!reference) {
-          return {
-            success: false,
-            error: "Reference not found in uploaded PDF",
-          };
-        }
-
-        pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
-      }
-
-      // ===== IMAGE FILE =====
-      else if (input.fileType === "image") {
-        reference = await extractReferenceFromImage(input.fileBuffer);
-
-        if (!reference) {
-          return {
-            success: false,
-            error: "Reference not found in uploaded image",
-          };
-        }
-
-        pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
+      if (type === "pdf") {
+        text = await extractTextWithFallback(input.fileBuffer);
       } else {
-        return {
-          success: false,
-          error: "Unsupported fileType",
-        };
-      }
-    }
-
-    // 3️⃣ FILE PATH MODE
-    else if (input.filePath) {
-      if (!fs.existsSync(input.filePath)) {
-        return {
-          success: false,
-          error: "File path does not exist",
-        };
-      }
-
-      const uploadedBuffer = fs.readFileSync(input.filePath);
-
-      let text = await extractTextFromPdfBuffer(uploadedBuffer);
-
-      if (!text || text.length < 50) {
-        return {
-          success: false,
-          error:
-            "Uploaded PDF has no readable text layer. Please upload original slip or image file.",
-        };
+        const ocr = await Tesseract.recognize(input.fileBuffer, "eng");
+        text = clean(ocr.data.text);
       }
 
       reference = extractReference(text) ?? undefined;
 
-      if (!reference) {
+      if (!reference || !validateReference(reference)) {
         return {
           success: false,
-          error: "Reference not found in uploaded PDF",
+          error: "Invalid or corrupted reference extracted from file",
+        };
+      }
+
+      pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
+    } else {
+      if (!reference || !validateReference(reference)) {
+        return {
+          success: false,
+          error: "Valid transaction reference is required",
         };
       }
 
       pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
     }
 
-    // 4️⃣ REFERENCE ONLY MODE
-    else {
-      if (!reference) {
-        return {
-          success: false,
-          error: "Transaction reference is required",
-        };
-      }
-
-      pdfBuffer = await fetchSlipPdf(reference, input.accountSuffix);
-    }
-
-    // 5️⃣ Safety Check (TypeScript-safe)
     if (!pdfBuffer) {
+      return { success: false, error: "Failed to retrieve slip PDF" };
+    }
+
+    let officialText = await extractTextFromPdf(pdfBuffer);
+
+    if (!officialText || officialText.length < 100) {
+      const imageBuffer = await convertPdfToImage(pdfBuffer);
+      const ocr = await Tesseract.recognize(imageBuffer, "eng");
+      officialText = clean(ocr.data.text);
+    }
+
+    const parsed = parseSlip(officialText);
+
+    if (!parsed.success) {
+      return parsed;
+    }
+
+    if (parsed.data.reference !== reference) {
       return {
         success: false,
-        error: "Failed to retrieve slip PDF",
+        error: "Reference mismatch — OCR may have extracted incorrect value",
       };
     }
 
-    // 6️⃣ Extract and Parse Official Slip
-    const pdfText = await extractTextFromPdfBuffer(pdfBuffer);
-
-    if (!pdfText || pdfText.length < 50) {
-      return {
-        success: false,
-        error: "Slip PDF returned empty or invalid content",
-      };
-    }
-
-    return parseSlip(pdfText);
+    return parsed;
   } catch (err: any) {
     return {
       success: false,
