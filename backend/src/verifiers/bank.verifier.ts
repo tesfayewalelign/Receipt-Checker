@@ -24,11 +24,23 @@ export async function verifyByBank(
     case BankType.CBE:
       return verifyCBE(payload);
 
-    case BankType.TELEBIRR:
-      if (!payload.reference) {
-        return { success: false, error: "Reference is required for Telebirr" };
+    case BankType.TELEBIRR: {
+      const hasReference = !!payload.reference?.trim();
+      const hasFile = !!payload.fileBuffer || !!payload.filePath;
+
+      if (!hasReference && !hasFile) {
+        return {
+          success: false,
+          error: "Provide transaction reference or receipt file",
+        };
       }
-      return verifyTelebirr(payload.reference);
+
+      return verifyTelebirr({
+        reference: payload.reference,
+        fileBuffer: payload.fileBuffer,
+        fileType: payload.fileType,
+      });
+    }
 
     case BankType.ABYSSINIA: {
       if (!payload.accountSuffix) {

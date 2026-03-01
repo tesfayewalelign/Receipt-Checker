@@ -4,6 +4,7 @@ import { BankType, verifyByBank } from "../../verifiers/bank.verifier";
 import { VerifyResult } from "../../verifiers/cbe.verifier";
 import { verifyDashen } from "../../verifiers/dashen.verifier";
 import { verifyCBEBirr } from "../../verifiers/cbebirr.verifier";
+import { verifyTelebirr } from "../../verifiers/telebirr.verifier";
 
 export interface VerifyPayload {
   pdfBuffer?: Buffer;
@@ -37,14 +38,23 @@ export class VerificationService {
         }
         break;
 
-      case BankType.TELEBIRR:
-        if (!payload.reference && !payload.pdfBuffer) {
+      case BankType.TELEBIRR: {
+        const hasReference = !!payload.reference?.trim();
+        const hasFile = !!payload.fileBuffer;
+
+        if (!hasReference && !hasFile) {
           return {
             success: false,
             error: "Provide transaction reference or receipt file",
           };
         }
-        break;
+
+        return await verifyTelebirr({
+          reference: payload.reference,
+          fileBuffer: payload.fileBuffer,
+          fileType: payload.fileType,
+        });
+      }
 
       case BankType.ABYSSINIA: {
         if (!payload.accountSuffix) {

@@ -1,8 +1,9 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
-import logger from "../utils/logger";
+import { createWorker } from "tesseract.js";
+import sharp from "sharp";
 import { VerifyResult } from "./cbe.verifier";
-import Tesseract from "tesseract.js";
+import logger from "../utils/logger";
 
 export interface TelebirrReceipt {
   reference: string;
@@ -15,25 +16,46 @@ export interface TelebirrReceipt {
   date: Date;
 }
 
-async function extractReferenceFromPdfBuffer(buffer: Buffer): Promise<string> {
+export async function extractReferenceFromPdf(buffer: Buffer): Promise<string> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.js");
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
-  let fullText = "";
+  let text = "";
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    fullText += content.items.map((i: any) => i.str).join(" ") + " ";
+    text += content.items.map((i: any) => i.str).join(" ") + " ";
   }
-  // Match Telebirr reference pattern (adjust regex if needed)
-  const match = fullText.match(/DB[A-Z0-9]{8}/i);
+  const match = text.replace(/\s+/g, "").match(/DB[A-Z0-9]{7,12}/i);
   if (!match) throw new Error("Reference not found in PDF");
   return match[0].toUpperCase();
 }
 
-async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
-  const result = await Tesseract.recognize(buffer, "eng");
-  const text = result.data.text;
-  const match = text.match(/DB[A-Z0-9]{8}/i);
+export async function extractReferenceFromImage(
+  buffer: Buffer,
+): Promise<string> {
+  const processed = await sharp(buffer)
+    .resize({ width: 2000 })
+    .grayscale()
+    .normalize()
+    .sharpen()
+    .toBuffer();
+
+  const worker: any = await createWorker();
+  await worker.load();
+  await worker.loadLanguage("eng");
+  await worker.initialize("eng");
+  await worker.setParameters({
+    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+  });
+
+  const { data } = await worker.recognize(processed);
+  await worker.terminate();
+
+  let text = data.text
+    .replace(/\s+/g, "")
+    .replace(/0/g, "O")
+    .replace(/1/g, "I");
+  const match = text.match(/DB[A-Z0-9]{7,12}/i);
   if (!match) throw new Error("Reference not found in image");
   return match[0].toUpperCase();
 }
@@ -41,44 +63,32 @@ async function extractReferenceFromImage(buffer: Buffer): Promise<string> {
 export class TelebirrVerifier {
   private readonly BASE_URL = "https://transactioninfo.ethiotelecom.et/receipt";
 
-  async verify(reference: string): Promise<TelebirrReceipt | null> {
-    try {
-      logger.info(`Telebirr verification started: ${reference}`);
+  async verify(reference: string): Promise<TelebirrReceipt> {
+    if (!/^DB[A-Z0-9]{7,12}$/i.test(reference))
+      throw new Error("Invalid reference format");
 
-      const html = await this.fetchReceipt(reference);
-      if (!html) return null;
+    const html = await this.fetchReceipt(reference);
+    if (!html || html.includes("This request is not correct"))
+      throw new Error("Invalid Telebirr reference or receipt not found");
 
-      if (html.includes("This request is not correct")) {
-        logger.warn("Invalid Telebirr reference");
-        return null;
-      }
+    const receipt = this.parseReceipt(html, reference);
+    if (!receipt) throw new Error("Failed to parse receipt");
 
-      const parsed = this.parseReceipt(html, reference);
-      if (!parsed) return null;
+    if (!this.validateReceipt(receipt))
+      throw new Error("Receipt validation failed");
 
-      if (!this.validateReceipt(parsed)) return null;
-
-      logger.info(`Telebirr verification SUCCESS: ${reference}`);
-      return parsed;
-    } catch (error: any) {
-      logger.error("Telebirr verification error:", error.message);
-      return null;
-    }
+    return receipt;
   }
 
-  private async fetchReceipt(reference: string): Promise<string | null> {
+  private async fetchReceipt(reference: string): Promise<string> {
     try {
       const response = await axios.get(`${this.BASE_URL}/${reference}`, {
         timeout: 15000,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        },
+        headers: { "User-Agent": "Mozilla/5.0" },
       });
-
       return response.data;
-    } catch (error: any) {
-      logger.error("Failed to fetch Telebirr receipt:", error.message);
-      return null;
+    } catch (err: any) {
+      throw new Error("Failed to fetch Telebirr receipt: " + err.message);
     }
   }
 
@@ -86,133 +96,99 @@ export class TelebirrVerifier {
     html: string,
     reference: string,
   ): TelebirrReceipt | null {
-    try {
-      const $ = cheerio.load(html);
+    const $ = cheerio.load(html);
+    let payer: string | undefined;
+    let receiver: string | undefined;
+    let status: string | undefined;
+    let receiptNo: string | undefined;
+    let dateStr: string | undefined;
+    let amountStr: string | undefined;
 
-      let payer: string | undefined;
-      $("td").each((_, el) => {
-        const text = $(el).text().trim();
-        if (text.includes("Payer Name")) {
-          payer = $(el).next("td").text().trim();
+    $("td").each((_, el) => {
+      const text = $(el).text().trim();
+      if (text.includes("Payer Name")) payer = $(el).next("td").text().trim();
+      if (text.includes("Credited Party name"))
+        receiver = $(el).next("td").text().trim();
+      if (text.toLowerCase().includes("transaction status"))
+        status = $(el).next("td").text().trim();
+    });
+
+    $("table tr").each((_, row) => {
+      const cols = $(row).find("td");
+      if (cols.length >= 3) {
+        const invoice = $(cols[0]).text().trim();
+        const date = $(cols[1]).text().trim();
+        const amount = $(cols[2]).text().trim();
+        if (invoice === reference) {
+          receiptNo = invoice;
+          dateStr = date;
+          amountStr = amount;
         }
-      });
-
-      let receiver: string | undefined;
-      $("td").each((_, el) => {
-        const text = $(el).text().trim();
-        if (text.includes("Credited Party name")) {
-          receiver = $(el).next("td").text().trim();
-        }
-      });
-
-      let status: string | undefined;
-      $("td").each((_, el) => {
-        const text = $(el).text().trim();
-        if (text.toLowerCase().includes("transaction status")) {
-          status = $(el).next("td").text().trim();
-        }
-      });
-
-      let receiptNo: string | undefined;
-      let dateStr: string | undefined;
-      let amountStr: string | undefined;
-
-      $("table").each((_, table) => {
-        const rows = $(table).find("tr");
-        rows.each((i, row) => {
-          const cols = $(row).find("td");
-
-          if (cols.length >= 3) {
-            const invoice = $(cols[0]).text().trim();
-            const date = $(cols[1]).text().trim();
-            const amount = $(cols[2]).text().trim();
-
-            if (invoice && date && amount && invoice === reference) {
-              receiptNo = invoice;
-              dateStr = date;
-              amountStr = amount;
-            }
-          }
-        });
-      });
-
-      if (!receiptNo || !dateStr || !amountStr || !status) {
-        logger.warn("Missing required Telebirr fields");
-        return null;
       }
+    });
 
-      const amount = parseFloat(amountStr.replace(/[^\d.]/g, ""));
+    if (!receiptNo || !dateStr || !amountStr || !status) return null;
+    const amount = parseFloat(amountStr.replace(/[^\d.]/g, ""));
+    const date = new Date(dateStr);
+    if (isNaN(amount) || isNaN(date.getTime())) return null;
 
-      if (isNaN(amount)) return null;
-
-      const [day, month, yearTime] = dateStr.split("-");
-      const [year, time] = yearTime.split(" ");
-      const formattedDate = new Date(`${year}-${month}-${day}T${time}`);
-
-      if (isNaN(formattedDate.getTime())) {
-        logger.warn("Invalid date format:", dateStr);
-        return null;
-      }
-
-      return {
-        reference,
-        receiptNo,
-        amount,
-        totalPaid: amount,
-        payer,
-        receiver,
-        status,
-        date: formattedDate,
-      };
-    } catch (error: any) {
-      logger.error("Telebirr parse error:", error.message);
-      return null;
-    }
-  }
-
-  private validateReceipt(receipt: TelebirrReceipt): boolean {
-    if (!receipt.reference) return false;
-    if (!receipt.amount || receipt.amount <= 0) return false;
-
-    const validStatus = ["success", "paid", "complete"];
-    const statusOk = validStatus.some((word) =>
-      receipt.status.toLowerCase().includes(word),
-    );
-
-    if (!statusOk) {
-      logger.warn("Invalid Telebirr status:", receipt.status);
-      return false;
-    }
-
-    if (!receipt.receiptNo) return false;
-    if (!receipt.date) return false;
-
-    return true;
-  }
-}
-
-export async function verifyTelebirr(reference: string): Promise<VerifyResult> {
-  const verifier = new TelebirrVerifier();
-  const receipt = await verifier.verify(reference);
-
-  if (!receipt) {
     return {
-      success: false,
-      error: "Telebirr verification failed",
+      reference,
+      receiptNo,
+      amount,
+      totalPaid: amount,
+      payer,
+      receiver,
+      status,
+      date,
     };
   }
 
-  return {
-    success: true,
-    data: {
-      payer: receipt.payer || "",
-      payerAccount: "",
-      receiver: receipt.receiver || "",
-      receiverAccount: "",
-      amount: receipt.amount,
-      date: receipt.date,
-      reference: receipt.reference,
-      reason: undefined,
-    },
-  };
+  private validateReceipt(receipt: TelebirrReceipt): boolean {
+    if (!receipt.reference || !receipt.amount || receipt.amount <= 0)
+      return false;
+    if (!receipt.receiptNo || !receipt.date) return false;
+    return ["success", "paid", "complete"].some((s) =>
+      receipt.status.toLowerCase().includes(s),
+    );
+  }
+}
+
+export async function verifyTelebirr(payload: {
+  reference?: string;
+  fileBuffer?: Buffer;
+  fileType?: "pdf" | "image";
+}): Promise<VerifyResult> {
+  try {
+    let reference = payload.reference;
+
+    if (!reference && payload.fileBuffer) {
+      reference =
+        payload.fileType === "pdf"
+          ? await extractReferenceFromPdf(payload.fileBuffer)
+          : await extractReferenceFromImage(payload.fileBuffer);
+    }
+
+    if (!reference)
+      throw new Error("Reference not provided or could not be extracted");
+
+    const verifier = new TelebirrVerifier();
+    const receipt = await verifier.verify(reference);
+
+    return {
+      success: true,
+      data: {
+        payer: receipt.payer ?? "",
+        payerAccount: "",
+        receiver: receipt.receiver ?? "",
+        receiverAccount: "",
+        amount: receipt.amount,
+        date: receipt.date,
+        reference: receipt.reference,
+        reason: undefined,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
