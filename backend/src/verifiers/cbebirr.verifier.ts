@@ -1,9 +1,11 @@
-import axios, { AxiosResponse } from "axios";
+import axios from "axios";
 import https from "https";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
+import pdfParse from "pdf-parse";
+import Tesseract from "tesseract.js";
+import fs from "fs";
 import logger from "../utils/logger";
 
-// Disable worker for Node.js
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = undefined;
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
@@ -28,32 +30,80 @@ export interface CBEBirrVerifyResult {
   error?: string;
 }
 
+async function extractReceiptFromPDF(
+  filePath: string,
+): Promise<string | undefined> {
+  const buffer = fs.readFileSync(filePath);
+
+  const data = await (pdfParse as unknown as (buffer: Buffer) => Promise<any>)(
+    buffer,
+  );
+
+  const match = data.text.match(/(CL[A-Z0-9]+)/i);
+
+  return match?.[1];
+}
+
+async function extractReceiptFromImage(
+  filePath: string,
+): Promise<string | null> {
+  const result = await Tesseract.recognize(filePath, "eng");
+
+  const text = result.data.text;
+  const match = text.match(/(CL[A-Z0-9]+)/i);
+
+  return match ? match[1] : null;
+}
+
 export async function verifyCBEBirr(input: {
-  receiptNumber: string;
+  receiptNumber?: string;
   phoneNumber: string;
   apiKey: string;
+  filePath?: string;
 }): Promise<CBEBirrVerifyResult> {
   try {
-    const { receiptNumber, phoneNumber } = input;
+    let { receiptNumber, phoneNumber, filePath } = input;
 
-    if (!receiptNumber || !phoneNumber) {
+    if (!phoneNumber) {
       return {
         success: false,
-        error: "Receipt number and phone number are required",
+        error: "Phone number is required",
+      };
+    }
+
+    if (!receiptNumber && filePath) {
+      logger.info("[CBEBirr] Extracting receipt from file");
+
+      if (filePath.endsWith(".pdf")) {
+        receiptNumber = (await extractReceiptFromPDF(filePath)) ?? undefined;
+      } else {
+        receiptNumber = (await extractReceiptFromImage(filePath)) ?? undefined;
+      }
+
+      if (!receiptNumber) {
+        return {
+          success: false,
+          error: "Could not extract receipt number from file",
+        };
+      }
+    }
+
+    if (!receiptNumber) {
+      return {
+        success: false,
+        error: "Receipt number is required",
       };
     }
 
     const url = `https://cbepay1.cbe.com.et/aureceipt?TID=${receiptNumber}&PH=${phoneNumber}`;
-    logger.info(`🔎 [CBEBirr] Fetching receipt: ${receiptNumber}`);
 
-    // Fetch PDF
-    const response: AxiosResponse<ArrayBuffer> = await axios.get(url, {
+    logger.info(`[CBEBirr] Fetching receipt ${receiptNumber}`);
+
+    const response = await axios.get<ArrayBuffer>(url, {
       responseType: "arraybuffer",
       timeout: 30000,
       httpsAgent,
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-      },
+      headers: { "User-Agent": "Mozilla/5.0" },
     });
 
     if (!response.data) {
@@ -61,112 +111,73 @@ export async function verifyCBEBirr(input: {
     }
 
     if (!response.headers["content-type"]?.includes("pdf")) {
-      return {
-        success: false,
-        error: "Response is not a valid PDF file",
-      };
+      return { success: false, error: "Response is not a valid PDF" };
     }
 
-    // Convert to Uint8Array (REQUIRED by pdfjs)
-    const uint8Array = new Uint8Array(response.data);
-
     const pdf = await pdfjsLib.getDocument({
-      data: uint8Array,
+      data: new Uint8Array(response.data),
     }).promise;
 
-    let fullText = "";
+    let text = "";
 
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      const pageText = content.items.map((item: any) => item.str).join(" ");
-      fullText += pageText + "\n";
+
+      text += content.items.map((item: any) => item.str).join(" ") + "\n";
     }
 
-    const text = fullText.replace(/\s+/g, " ").trim();
+    text = text.replace(/\s+/g, " ").trim();
 
-    // Helper functions
     const extract = (regex: RegExp): string | null =>
       text.match(regex)?.[1]?.trim() ?? null;
 
-    const extractAmount = (regex: RegExp): number | null => {
-      const match = text.match(regex);
-      if (!match?.[1]) return null;
-      const num = parseFloat(match[1].replace(/,/g, ""));
-      return isNaN(num) ? null : num;
-    };
-
-    // ===== Extract Fields Based On Real Receipt Format =====
-
-    // ===== Extract fields safely first =====
-
-    // Receipt Number
     const receiptNumberParsed = extract(/(CL[A-Z0-9]+)/i);
 
-    // Transaction Date
     const dateMatch = text.match(/\d{4}-\d{2}-\d{2}\s*\d{2}:\d{2}/);
     const transactionDateParsed = dateMatch ? new Date(dateMatch[0]) : null;
 
-    // Amounts
     const allAmounts = [...text.matchAll(/(\d+\.\d{2})/g)].map((m) =>
       parseFloat(m[1]),
     );
-    const amountParsed = allAmounts.length > 0 ? allAmounts[0] : null;
 
-    // Financial breakdowns using keyword extraction
+    const amountParsed = allAmounts.length ? allAmounts[0] : null;
+
     const extractAfterKeyword = (keyword: string): number | null => {
-      const regex = new RegExp(keyword + "\\s*(\\d+\\.\\d{2})", "i");
-      const match = text.match(regex);
+      const match = text.match(
+        new RegExp(`${keyword}\\s*(\\d+\\.\\d{2})`, "i"),
+      );
       return match ? parseFloat(match[1]) : null;
     };
 
-    const paidAmountParsed = extractAfterKeyword("Paid amount");
-    const serviceChargeParsed = extractAfterKeyword("Service Charge");
-    const vatParsed = extractAfterKeyword("VAT");
-    const totalPaidAmountParsed =
-      extractAfterKeyword("Total Paid Amount") ??
-      (allAmounts.length > 0 ? Math.max(...allAmounts) : null);
-
-    // Other fields
-    const customerNameParsed = extract(
-      /Debit\s*Account\s*\d+\s*-\s*(.*?)\s+Credit/i,
-    );
-    const debitAccountParsed = extract(/Debit\s*Account\s*([0-9]+)/i);
-    const creditAccountParsed = extract(/Credit\s*Account\s*([0-9\*]+)/i);
-    const receiverNameParsed = extract(/Receiver\s*Name\s*(.*?)\s+Order/i);
-    const orderIdParsed = extract(/Order\s*ID\s*([A-Z0-9]+)/i);
-    const transactionStatusParsed = extract(/Transaction\s*Status\s*(\w+)/i);
-    const paymentReasonParsed = extract(
-      /Payment\s*Reason\s*(.*?)\s+Payment\s*Channel/i,
-    );
-    const paymentChannelParsed = extract(/Payment\s*Channel\s*(\w+)/i);
-
-    // ===== Now build the result object =====
     const result: CBEBirrVerifyResult = {
       success: true,
-      customerName: customerNameParsed,
-      debitAccount: debitAccountParsed,
-      creditAccount: creditAccountParsed,
-      receiverName: receiverNameParsed,
-      orderId: orderIdParsed,
-      transactionStatus: transactionStatusParsed,
+      customerName: extract(/Debit\s*Account\s*\d+\s*-\s*(.*?)\s+Credit/i),
+      debitAccount: extract(/Debit\s*Account\s*([0-9]+)/i),
+      creditAccount: extract(/Credit\s*Account\s*([0-9\*]+)/i),
+      receiverName: extract(/Receiver\s*Name\s*(.*?)\s+Order/i),
+      orderId: extract(/Order\s*ID\s*([A-Z0-9]+)/i),
+      transactionStatus: extract(/Transaction\s*Status\s*(\w+)/i),
       receiptNumber: receiptNumberParsed,
       transactionDate: transactionDateParsed,
       amount: amountParsed,
-      paidAmount: paidAmountParsed,
-      serviceCharge: serviceChargeParsed,
-      vat: vatParsed,
-      totalPaidAmount: totalPaidAmountParsed,
-      paymentReason: paymentReasonParsed,
-      paymentChannel: paymentChannelParsed,
+      paidAmount: extractAfterKeyword("Paid amount"),
+      serviceCharge: extractAfterKeyword("Service Charge"),
+      vat: extractAfterKeyword("VAT"),
+      totalPaidAmount:
+        extractAfterKeyword("Total Paid Amount") ??
+        (allAmounts.length ? Math.max(...allAmounts) : null),
+      paymentReason: extract(/Payment\s*Reason\s*(.*?)\s+Payment\s*Channel/i),
+      paymentChannel: extract(/Payment\s*Channel\s*(\w+)/i),
     };
 
     return result;
   } catch (err: any) {
-    logger.error("❌ [CBEBirr] Verification failed:", err.message);
+    logger.error("[CBEBirr] Verification failed:", err.message);
+
     return {
       success: false,
-      error: err.message || "Verification failed",
+      error: err?.message || "Verification failed",
     };
   }
 }

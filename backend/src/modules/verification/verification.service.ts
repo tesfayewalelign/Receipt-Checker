@@ -111,21 +111,56 @@ export class VerificationService {
         return await verifyAwash({ reference });
       }
       case BankType.CBEBIRR: {
-        const hasReceipt = !!payload.receiptNumber?.trim();
-        const hasPhone = !!payload.phoneNumber?.trim();
+        const phoneNumber = payload.phoneNumber?.trim();
+        const receiptNumber = payload.receiptNumber?.trim();
+        const filePath = payload.filePath;
 
-        if (!hasReceipt || !hasPhone) {
+        const hasPhone = !!phoneNumber;
+        const hasReceipt = !!receiptNumber;
+        const hasFile = !!filePath;
+
+        if (!hasPhone) {
           return {
             success: false,
-            error: "Receipt number and phone number are required",
+            error: "phoneNumber is required for CBEBirr verification",
           };
         }
 
-        return await verifyCBEBirr({
-          receiptNumber: payload.receiptNumber!,
-          phoneNumber: payload.phoneNumber!,
-          apiKey: payload.apiKey!,
-        });
+        if (!hasReceipt && !hasFile) {
+          return {
+            success: false,
+            error:
+              "Provide either receiptNumber or a file for CBEBirr verification",
+          };
+        }
+
+        if (hasReceipt) {
+          return await verifyCBEBirr({
+            receiptNumber,
+            phoneNumber,
+            apiKey: process.env.CBE_API_KEY || "",
+          });
+        }
+
+        if (hasFile) {
+          if (!payload.fileType) {
+            return {
+              success: false,
+              error: "fileType is required when uploading a file",
+            };
+          }
+
+          return await verifyCBEBirr({
+            phoneNumber,
+            apiKey: process.env.CBE_API_KEY || "",
+            filePath,
+          });
+        }
+
+        return {
+          success: false,
+          error: "Invalid CBEBirr verification input",
+        };
       }
 
       case BankType.MPESA:
