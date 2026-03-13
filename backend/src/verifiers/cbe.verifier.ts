@@ -53,26 +53,35 @@ export async function extractReferenceFromImage(
   buffer: Buffer,
 ): Promise<string> {
   const processedBuffer = await sharp(buffer)
+    .rotate()
     .grayscale()
     .normalize()
     .sharpen()
-    .resize({ width: 2000 })
+    .resize({ width: 2500 })
+    .threshold(150)
     .toBuffer();
-  const worker: any = await createWorker();
-  await worker.loadLanguage("eng");
-  await worker.initialize("eng");
-  await worker.setParameters({
-    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-  });
+
+  const worker = await createWorker("eng");
+
   const { data } = await worker.recognize(processedBuffer);
+
   await worker.terminate();
-  let text = data.text.replace(/\s+/g, " ");
-  text = text.replace(/1/g, "I").replace(/0/g, "O");
-  const reference = text.match(
-    /Reference\s*No\.?\s*(?:\(VAT\s*Invoice\s*No\))?\s*([A-Z0-9]{8,})/i,
-  )?.[1];
-  if (!reference) throw new Error("Reference not found in image");
-  return reference.toUpperCase().trim();
+
+  let text = data.text;
+
+  text = text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+
+  console.log("OCR TEXT:", text);
+
+  const matches = text.match(/\bFT[A-Z0-9]{8,}\b/g);
+
+  if (!matches || matches.length === 0) {
+    throw new Error("Reference not found in image");
+  }
+
+  const reference = matches[matches.length - 1];
+
+  return reference;
 }
 
 export async function verifyCBE(payload: {

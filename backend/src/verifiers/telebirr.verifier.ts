@@ -40,8 +40,8 @@ export async function extractReferenceFromImage(
     .replace(/\s+/g, "")
     .replace(/0/g, "O")
     .replace(/1/g, "I");
+  const match = cleaned.match(/[A-Z]{2}[A-Z0-9]{8,}/);
 
-  const match = cleaned.match(/DB[A-Z0-9]+/i);
   if (!match) throw new Error("Reference not found in image");
 
   return normalizeReference(match[0]);
@@ -128,16 +128,34 @@ export class TelebirrVerifier {
       const $ = cheerio.load(html);
       const bodyText = $("body").text().replace(/\s+/g, " ");
 
-      const amountMatch = bodyText.match(/ETB\s?([\d,]+\.\d{2})/i);
+      const amountMatch =
+        bodyText.match(/([\d,]+\.\d{2})\s?(Birr|ETB)/i) ||
+        bodyText.match(/(Birr|ETB)\s?([\d,]+\.\d{2})/i);
+
       const dateMatch = bodyText.match(/\d{2}-\d{2}-\d{4}\s\d{2}:\d{2}:\d{2}/);
+
       const statusMatch = bodyText.match(
-        /(success|paid|complete|failed|pending)/i,
+        /(success|successful|paid|complete|completed|failed|pending)/i,
       );
 
       const amount = amountMatch
-        ? parseFloat(amountMatch[1].replace(/,/g, ""))
+        ? parseFloat(amountMatch[1] || amountMatch[2])
         : NaN;
-      const date = dateMatch ? new Date(dateMatch[0].replace(/-/g, "/")) : null;
+
+      let date: Date | null = null;
+
+      if (dateMatch) {
+        const parts = dateMatch[0].split(/[- :]/);
+        date = new Date(
+          Number(parts[2]),
+          Number(parts[1]) - 1,
+          Number(parts[0]),
+          Number(parts[3]),
+          Number(parts[4]),
+          Number(parts[5]),
+        );
+      }
+
       const status = statusMatch ? statusMatch[0] : undefined;
 
       if (!amount || isNaN(amount) || !date || !status) return null;
