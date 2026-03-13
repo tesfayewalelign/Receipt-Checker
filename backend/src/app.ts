@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import verificationRoutes from "./modules/verification/verification.routes";
+import verificationRoutes from "./modules/verification/routes/index";
 import { errorHandler } from "./middlewares/error.middleware";
 
 dotenv.config();
