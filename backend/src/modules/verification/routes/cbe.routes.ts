@@ -4,6 +4,6 @@ import { upload } from "../../../middlewares/upload.middleware";
 
 const router = Router();
 
-router.post("/verify", upload.single("file"), CBEController.verify);
+router.post("/", upload.single("file"), CBEController.verify);
 
 export default router;

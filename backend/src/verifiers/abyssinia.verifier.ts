@@ -64,7 +64,9 @@ async function extractTextWithFallback(buffer: Buffer): Promise<string> {
 }
 
 function extractReference(text: string): string | null {
-  const match = text.match(/Transaction\s*Reference[:\s]+(FT[A-Z0-9]{8,})/i);
+  const match = text.match(
+    /Transaction\s*Reference[:\s]*\n?\s*(FT[A-Z0-9]{8,})/i,
+  );
 
   return match ? match[1].toUpperCase() : null;
 }
@@ -158,7 +160,13 @@ export async function verifyAbyssinia(input: {
       let text = "";
 
       if (type === "pdf") {
-        text = await extractTextWithFallback(input.fileBuffer);
+        let text = await extractTextFromPdf(input.fileBuffer);
+
+        if (!text || text.length < 100) {
+          const imageBuffer = await convertPdfToImage(input.fileBuffer);
+          const ocr = await Tesseract.recognize(imageBuffer, "eng");
+          text = clean(ocr.data.text);
+        }
       } else {
         const ocr = await Tesseract.recognize(input.fileBuffer, "eng");
         text = clean(ocr.data.text);
