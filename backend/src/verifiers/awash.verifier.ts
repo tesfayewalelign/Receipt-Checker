@@ -1,150 +1,112 @@
 import puppeteer from "puppeteer";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
+import Tesseract from "tesseract.js";
+
+const clean = (text: string) => text.replace(/\s+/g, " ").trim();
+
+function detectFileType(buffer: Buffer): "pdf" | "image" {
+  return buffer.slice(0, 4).toString() === "%PDF" ? "pdf" : "image";
+}
+
+async function extractReferenceFromPdf(buffer: Buffer): Promise<string | null> {
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+  let fullText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    fullText += content.items.map((item: any) => item.str).join(" ") + " ";
+  }
+  const match = fullText.match(
+    /Transaction\s*Reference[:\s]+(FT[A-Z0-9]{8,})/i,
+  );
+  return match ? match[1].toUpperCase() : null;
+}
+
+async function extractReferenceFromImage(
+  buffer: Buffer,
+): Promise<string | null> {
+  const result = await Tesseract.recognize(buffer, "eng");
+  const text = clean(result.data.text);
+  const match = text.match(/Transaction\s*Reference[:\s]+(FT[A-Z0-9]{8,})/i);
+  return match ? match[1].toUpperCase() : null;
+}
 
 export interface AwashVerifyResult {
   success: boolean;
-  transactionTime?: string | null;
-  transactionType?: string | null;
-  transactionAmount?: string | null;
-  vat?: string | null;
-  senderName?: string | null;
-  senderAccountNumber?: string | null;
-  receiverName?: string | null;
-  receiverAccountNumber?: string | null;
-  beneficiaryBank?: string | null;
-  reason?: string | null;
-  transactionReference?: string | null;
+  reference?: string;
+  data?: Record<string, string>;
   stampUrl?: string | null;
-  allFields?: Record<string, string>;
   error?: string;
 }
 
 export async function verifyAwash(payload: {
-  reference: string;
+  reference?: string;
+  fileBuffer?: Buffer;
 }): Promise<AwashVerifyResult> {
-  if (!payload?.reference) {
+  let reference = payload.reference;
+
+  if (!reference && payload.fileBuffer) {
+    const type = detectFileType(payload.fileBuffer);
+    reference =
+      type === "pdf"
+        ? ((await extractReferenceFromPdf(payload.fileBuffer)) ?? undefined)
+        : ((await extractReferenceFromImage(payload.fileBuffer)) ?? undefined);
+  }
+
+  if (!reference) {
     return { success: false, error: "Transaction reference is required" };
   }
 
-  const url = `https://awashpay.awashbank.com:8225/${payload.reference}`;
   let browser;
-
   try {
+    const url = `https://awashpay.awashbank.com:8225/${reference}`;
     browser = await puppeteer.launch({
       headless: true,
       args: ["--no-sandbox"],
     });
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-
     await page.waitForSelector("table, .error-message", { timeout: 20000 });
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    let data: { all: Record<string, string>; stampUrl: string | null } | null =
-      null;
-    const maxRetries = 3;
-
-    for (let i = 0; i < maxRetries; i++) {
-      data = await page.evaluate(() => {
-        const tables = Array.from(
-          document.querySelectorAll("table"),
-        ) as HTMLElement[];
-        const allFields: Record<string, string> = {};
-
-        tables.forEach((table) => {
-          const rows = Array.from(
-            table.querySelectorAll("tr"),
+    const data = await page.evaluate(() => {
+      const tables = Array.from(
+        document.querySelectorAll("table"),
+      ) as HTMLElement[];
+      const allFields: Record<string, string> = {};
+      tables.forEach((table) => {
+        Array.from(table.querySelectorAll("tr")).forEach((row) => {
+          const cells = Array.from(
+            row.querySelectorAll("td, th"),
           ) as HTMLElement[];
-          rows.forEach((row) => {
-            const cells = Array.from(
-              row.querySelectorAll("td, th"),
-            ) as HTMLElement[];
-            if (cells.length >= 2) {
-              const label =
-                cells[0]?.innerText?.trim().replace(/[\r\n]/g, "") ?? "";
-              const value =
-                cells[cells.length - 1]?.innerText
-                  ?.trim()
-                  .replace(/[\r\n]/g, "") ?? "";
-              if (label) allFields[label] = value;
-            }
-          });
+          if (cells.length >= 2) {
+            const label = cells[0]?.innerText?.trim() ?? "";
+            const value = cells[cells.length - 1]?.innerText?.trim() ?? "";
+            if (label) allFields[label] = value;
+          }
         });
-
-        const img = document.querySelector<HTMLImageElement>("img.stamp");
-        const stampUrl = img ? img.src : null;
-
-        return Object.keys(allFields).length > 0
-          ? { all: allFields, stampUrl }
-          : null;
       });
-
-      if (data) break;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-
-    const errorMsg = await page
-      .$eval(".error-message", (el) => el.textContent)
-      .catch(() => null);
-    if (errorMsg) {
-      await browser.close();
-      return {
-        success: false,
-        error: `Transaction not found: ${errorMsg.trim()}`,
-      };
-    }
+      const img = document.querySelector<HTMLImageElement>("img.stamp");
+      return Object.keys(allFields).length > 0
+        ? { all: allFields, stampUrl: img?.src || null }
+        : null;
+    });
 
     await browser.close();
 
-    if (!data) {
+    if (!data)
       return { success: false, error: "Failed to extract receipt data" };
-    }
-
-    const r = data.all;
-
-    const labelMap: Record<string, string[]> = {
-      transactionTime: ["Date"],
-      transactionType: ["Trans type"],
-      transactionAmount: ["Amount"],
-      vat: ["VAT", "VAT Reg No", "VAT Reg Date"],
-      senderName: ["Customer Name", "Name"],
-      senderAccountNumber: ["Account No", "Account"],
-      receiverName: ["Recipient", "Receiver Name", "Beneficiary name"],
-      receiverAccountNumber: ["Beneficiary Account", "Account"],
-      beneficiaryBank: ["Beneficiary Bank", "Bank"],
-      reason: ["Reason"],
-      transactionReference: ["Txn Ref", "Transaction ID"],
-    };
-
-    const getMappedValue = (keys: string[]): string | null => {
-      for (const key of keys) {
-        if (r[key]) return r[key];
-      }
-      return null;
-    };
 
     return {
       success: true,
-      transactionTime: getMappedValue(labelMap.transactionTime),
-      transactionType: getMappedValue(labelMap.transactionType),
-      transactionAmount: getMappedValue(labelMap.transactionAmount),
-      vat: getMappedValue(labelMap.vat),
-      senderName: getMappedValue(labelMap.senderName),
-      senderAccountNumber: getMappedValue(labelMap.senderAccountNumber),
-      receiverName: getMappedValue(labelMap.receiverName),
-      receiverAccountNumber: getMappedValue(labelMap.receiverAccountNumber),
-      beneficiaryBank: getMappedValue(labelMap.beneficiaryBank),
-      reason: getMappedValue(labelMap.reason),
-      transactionReference:
-        getMappedValue(labelMap.transactionReference) || payload.reference,
-      stampUrl: data.stampUrl || null,
-      allFields: r,
+      reference,
+      data: data.all,
+      stampUrl: data.stampUrl,
     };
-  } catch (error: any) {
+  } catch (err: any) {
     if (browser) await browser.close();
     return {
       success: false,
-      error: error?.message || "Awash verification failed",
+      error: err?.message || "Awash verification failed",
     };
   }
 }
