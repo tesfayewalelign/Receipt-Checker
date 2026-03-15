@@ -15,7 +15,8 @@ export class CBEBirrService {
       receiptNumber: input.receiptNumber,
       phoneNumber: input.phoneNumber,
       apiKey: input.apiKey,
-      filePath: undefined,
+      fileBuffer: input.fileBuffer,
+      fileType: input.fileType,
     });
   }
 }

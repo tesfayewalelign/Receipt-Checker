@@ -6,8 +6,16 @@ type MulterRequest = Request & { file?: Express.Multer.File };
 
 export class CBEBirrController {
   static async verify(req: Request, res: Response) {
-    const { receiptNumber, phoneNumber, apiKey } = req.body;
-    const file = (req as MulterRequest).file;
+    const r = req as MulterRequest;
+    const phoneNumber = r.body.phoneNumber || r.body.phone;
+    const receiptNumber = r.body.receiptNumber;
+    const apiKey = r.body.apiKey;
+    const fileBuffer = r.file?.buffer;
+    const fileType = r.file
+      ? r.file.mimetype.includes("pdf")
+        ? "pdf"
+        : "image"
+      : undefined;
 
     if (!phoneNumber) {
       return handleResponse(res, null, "Phone number is required", false);
@@ -18,12 +26,8 @@ export class CBEBirrController {
         receiptNumber,
         phoneNumber,
         apiKey,
-        fileBuffer: file?.buffer,
-        fileType: file
-          ? file.mimetype.includes("pdf")
-            ? "pdf"
-            : "image"
-          : undefined,
+        fileBuffer,
+        fileType,
       });
 
       if (!result.success) {

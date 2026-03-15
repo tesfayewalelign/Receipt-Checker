@@ -1,7 +1,6 @@
 import axios from "axios";
 import https from "https";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
-import pdfParse from "pdf-parse";
 import Tesseract from "tesseract.js";
 import fs from "fs";
 import logger from "../utils/logger";
@@ -9,6 +8,8 @@ import logger from "../utils/logger";
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = undefined;
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
+const pdfParse = require("pdf-parse");
 
 export interface CBEBirrVerifyResult {
   success: boolean;
@@ -30,39 +31,48 @@ export interface CBEBirrVerifyResult {
   error?: string;
 }
 
-async function extractReceiptFromPDF(
-  filePath: string,
-): Promise<string | undefined> {
-  const buffer = fs.readFileSync(filePath);
+async function extractReceiptFromPDFBuffer(
+  buffer: Buffer,
+): Promise<string | null> {
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) })
+    .promise;
+  let rawText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    rawText += content.items.map((item: any) => item.str).join(" ") + " ";
+  }
 
-  const data = await (pdfParse as unknown as (buffer: Buffer) => Promise<any>)(
-    buffer,
-  );
+  const cleanText = rawText.replace(/[^A-Z0-9]/gi, "");
+  const matches = cleanText.match(/\b[A-Z]{2,}[0-9A-Z]{5,}\b/g);
 
-  const match = data.text.match(/(CL[A-Z0-9]+)/i);
-
-  return match?.[1];
+  if (!matches || matches.length === 0) return null;
+  return matches[matches.length - 1];
 }
 
-async function extractReceiptFromImage(
-  filePath: string,
+async function extractReceiptFromImageBuffer(
+  buffer: Buffer,
 ): Promise<string | null> {
-  const result = await Tesseract.recognize(filePath, "eng");
-
-  const text = result.data.text;
-  const match = text.match(/(CL[A-Z0-9]+)/i);
-
-  return match ? match[1] : null;
+  const result = await Tesseract.recognize(buffer, "eng");
+  const text = result.data.text.replace(/\s+/g, "");
+  const match = text.match(/CL[A-Z0-9]{5,}/i);
+  return match ? match[0] : null;
 }
 
 export async function verifyCBEBirr(input: {
-  receiptNumber?: string;
+  receiptNumber?: string | null;
   phoneNumber: string;
   apiKey: string;
-  filePath?: string;
+  fileBuffer?: Buffer;
+  fileType?: "pdf" | "image";
 }): Promise<CBEBirrVerifyResult> {
   try {
-    let { receiptNumber, phoneNumber, filePath } = input;
+    let { receiptNumber, phoneNumber, fileBuffer, fileType } = input as {
+      receiptNumber?: string | null;
+      phoneNumber: string;
+      fileBuffer?: Buffer;
+      fileType?: "pdf" | "image";
+    };
 
     if (!phoneNumber) {
       return {
@@ -71,28 +81,43 @@ export async function verifyCBEBirr(input: {
       };
     }
 
-    if (!receiptNumber && filePath) {
-      logger.info("[CBEBirr] Extracting receipt from file");
-
-      if (filePath.endsWith(".pdf")) {
-        receiptNumber = (await extractReceiptFromPDF(filePath)) ?? undefined;
-      } else {
-        receiptNumber = (await extractReceiptFromImage(filePath)) ?? undefined;
+    if (!receiptNumber) {
+      if (!fileBuffer) {
+        return {
+          success: false,
+          error: "Receipt number or receipt file is required",
+        };
       }
 
+      logger.info("[CBEBirr] Extracting receipt number from uploaded file");
+
+      let extracted: string | null = null;
+
+      if (fileType === "pdf") {
+        const result = await extractReceiptFromPDFBuffer(fileBuffer);
+        extracted = result ?? null;
+      } else if (fileType === "image") {
+        const result = await extractReceiptFromImageBuffer(fileBuffer);
+        extracted = result ?? null;
+      } else {
+        return {
+          success: false,
+          error: "Unsupported file type",
+        };
+      }
+
+      receiptNumber = extracted;
+
       if (!receiptNumber) {
+        logger.warn("[CBEBirr] Receipt extraction failed");
+
         return {
           success: false,
           error: "Could not extract receipt number from file",
         };
       }
-    }
 
-    if (!receiptNumber) {
-      return {
-        success: false,
-        error: "Receipt number is required",
-      };
+      logger.info(`[CBEBirr] Extracted receipt number: ${receiptNumber}`);
     }
 
     const url = `https://cbepay1.cbe.com.et/aureceipt?TID=${receiptNumber}&PH=${phoneNumber}`;
