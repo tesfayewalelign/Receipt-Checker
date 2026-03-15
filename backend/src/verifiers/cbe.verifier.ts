@@ -3,6 +3,7 @@ import axios from "axios";
 import https from "https";
 import { createWorker } from "tesseract.js";
 import sharp from "sharp";
+
 const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
 
 export interface VerifyResult {

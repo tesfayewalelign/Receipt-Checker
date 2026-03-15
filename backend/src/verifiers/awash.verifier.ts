@@ -1,8 +1,16 @@
 import puppeteer from "puppeteer";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 import Tesseract from "tesseract.js";
+import { createWorker } from "tesseract.js";
+import sharp from "sharp";
 
-const clean = (text: string) => text.replace(/\s+/g, " ").trim();
+const cleanText = (text: string) =>
+  text
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/0/g, "O")
+    .replace(/1/g, "I")
+    .replace(/l/g, "I");
 
 function detectFileType(buffer: Buffer): "pdf" | "image" {
   return buffer.slice(0, 4).toString() === "%PDF" ? "pdf" : "image";
@@ -22,15 +30,31 @@ async function extractReferenceFromPdf(buffer: Buffer): Promise<string | null> {
   return match ? match[1].toUpperCase() : null;
 }
 
-async function extractReferenceFromImage(
+export async function extractReferenceFromImage(
   buffer: Buffer,
 ): Promise<string | null> {
-  const result = await Tesseract.recognize(buffer, "eng");
-  const text = clean(result.data.text);
-  const match = text.match(/Transaction\s*Reference[:\s]+(FT[A-Z0-9]{8,})/i);
-  return match ? match[1].toUpperCase() : null;
-}
+  const processedBuffer = await sharp(buffer)
+    .rotate()
+    .grayscale()
+    .normalize()
+    .sharpen()
+    .resize({ width: 2000 })
+    .toBuffer();
 
+  const worker: any = await createWorker();
+
+  try {
+    const { data } = await worker.recognize(processedBuffer, "eng");
+    const text = cleanText(data.text);
+
+    const matches = text.match(/\bFT[A-Z0-9]{6,12}\b/gi);
+    if (!matches || matches.length === 0) return null;
+
+    return matches[matches.length - 1].toUpperCase();
+  } finally {
+    await worker.terminate();
+  }
+}
 export interface AwashVerifyResult {
   success: boolean;
   reference?: string;
