@@ -58,26 +58,68 @@ export class TelebirrVerifier {
 
   async verify(reference: string): Promise<TelebirrReceipt | null> {
     if (!reference) return null;
+
     const cleanedRef = normalizeReference(reference);
+
     logger.info(`Verifying Telebirr: ${cleanedRef}`);
 
-    let html = await this.fetchReceipt(cleanedRef);
+    let html = await this.fetchReceiptViaProxy(cleanedRef);
+
     if (!html) {
+      logger.warn("Proxy failed, trying Puppeteer");
+      html = await this.fetchReceipt(cleanedRef);
+    }
+
+    if (!html) {
+      logger.warn("Puppeteer failed, trying Axios");
       html = await this.fetchReceiptFallback(cleanedRef);
-      if (!html) {
-        logger.warn("Failed to fetch receipt HTML even after fallback");
-        return null;
-      }
+    }
+
+    if (!html) {
+      logger.warn("All fetch methods failed");
+      return null;
     }
 
     const receipt = this.parseReceipt(html, cleanedRef);
+
     if (!receipt || !this.validateReceipt(receipt)) {
       logger.warn("Receipt validation failed");
       return null;
     }
 
     logger.info(`Telebirr verification SUCCESS: ${cleanedRef}`);
+
     return receipt;
+  }
+
+  private async fetchReceiptViaProxy(
+    reference: string,
+  ): Promise<string | null> {
+    try {
+      const url = process.env.TELEBIRR_PROXY_URL;
+      const key = process.env.TELEBIRR_PROXY_KEY;
+
+      if (!url || !key) {
+        logger.warn("Proxy env missing");
+        return null;
+      }
+
+      const response = await axios.post(
+        url,
+        { reference },
+        {
+          headers: {
+            "x-api-key": key,
+          },
+          timeout: 30000,
+        },
+      );
+
+      return response.data?.html ?? null;
+    } catch (err: any) {
+      logger.error("Proxy fetch failed:", err.message);
+      return null;
+    }
   }
 
   private async fetchReceipt(reference: string): Promise<string | null> {
