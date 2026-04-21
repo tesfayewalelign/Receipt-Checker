@@ -1,10 +1,10 @@
-import "./globals.css";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import "../globals.css";
+import Header from "../components/layout/Navbar";
+import Footer from "../components/layout/Footer";
 
 export const metadata = {
-  title: "Receipt Checker",
-  description: "Verify Ethiopian payment receipts instantly",
+  title: "ReceiptCheck",
+  description: "Ethiopian Payment Verification Platform",
 };
 
 export default function RootLayout({
@@ -14,9 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
-        <Navbar />
-        <main>{children}</main>
+      <body className="min-h-screen bg-white flex flex-col">
+        <Header />
+        <main className="flex-1">{children}</main>
         <Footer />
       </body>
     </html>
