@@ -9,7 +9,8 @@ import auth from "./lib/auth";
 dotenv.config();
 
 const app = express();
-app.all("/api/auth/*", toNodeHandler(auth));
+app.all("/api/auth/{*any}", toNodeHandler(auth));
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
