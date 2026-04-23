@@ -3,11 +3,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 import verificationRoutes from "./modules/verification/routes/index";
 import { errorHandler } from "./middlewares/error.middleware";
+import { toNodeHandler } from "better-auth/node";
+import auth from "./lib/auth";
 
 dotenv.config();
 
 const app = express();
-
+app.all("/api/auth/*", toNodeHandler(auth));
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
