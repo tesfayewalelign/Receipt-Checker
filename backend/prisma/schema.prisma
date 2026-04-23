@@ -7,20 +7,58 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
-
-enum Bank {
-  CBE
-  TELEBIRR
-  DASHEN
+enum Role {
+  developer
+  admin
 }
+
+enum KeyStatus {
+  active
+  revoked
+}
+
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            Int       @id @default(autoincrement())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  companyName   String?
+  role          String    @default("developer")
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  apiKeys       ApiKey[]
+  logs          UsageLog[]
 }
 
+model ApiKey {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  name        String
+  keyHash     String
+  prefix      String
+  status      String    @default("active")
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
 
+  user        User      @relation(fields: [userId], references: [id])
+  logs        UsageLog[]
+}
+
+model UsageLog {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  apiKeyId       Int
+  endpoint       String
+  method         String
+  statusCode     Int
+  responseTimeMs Int
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id])
+  apiKey         ApiKey   @relation(fields: [apiKeyId], references: [id])
+}
