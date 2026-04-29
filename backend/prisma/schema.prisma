@@ -19,23 +19,67 @@ enum KeyStatus {
 
 
 model User {
-  id            Int       @id @default(autoincrement())
-  name          String
-  email         String    @unique
-  passwordHash  String
-  companyName   String?
-  role          String    @default("developer")
-  isVerified    Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String    @id
+  name           String
+  email          String    @unique
+  emailVerified  Boolean   @default(false)
+  image          String?
 
-  apiKeys       ApiKey[]
-  logs          UsageLog[]
+  companyName    String?
+  role           String    @default("developer")
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  sessions       Session[]
+  accounts       Account[]
+
+  apiKeys        ApiKey[]
+  logs           UsageLog[]
+}
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+model Account {
+  id                    String @id
+  accountId             String
+  providerId            String
+  userId                String
+
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+
+  password              String?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model ApiKey {
   id          Int       @id @default(autoincrement())
-  userId      Int
+  userId      String
   name        String
   keyHash     String
   prefix      String
@@ -50,7 +94,7 @@ model ApiKey {
 
 model UsageLog {
   id             Int      @id @default(autoincrement())
-  userId         Int
+  userId         String
   apiKeyId       Int
   endpoint       String
   method         String
