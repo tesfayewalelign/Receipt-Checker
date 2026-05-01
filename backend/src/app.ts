@@ -9,9 +9,14 @@ import auth from "./lib/auth";
 dotenv.config();
 
 const app = express();
-app.all("/api/auth/{*any}", toNodeHandler(auth));
+app.all("/api/auth/*any", toNodeHandler(auth));
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -24,5 +29,7 @@ app.get("/health", (req, res) => {
     message: "Receipt Checker API is running 🚀",
   });
 });
-
+const session = await auth.api.getSession({
+  headers: await headers(), // you need to pass the headers object.
+});
 export default app;
