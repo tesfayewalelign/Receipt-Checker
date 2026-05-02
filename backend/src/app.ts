@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import verificationRoutes from "./modules/verification/routes/index";
 import { errorHandler } from "./middlewares/error.middleware";
 import { toNodeHandler } from "better-auth/node";
+import publicRoutes from "./modules/verification/routes/public.routes";
 import auth from "./lib/auth";
 
 dotenv.config();
@@ -19,7 +20,7 @@ app.use(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+app.use("/api", publicRoutes);
 app.use("/api/verification", verificationRoutes);
 app.use(errorHandler);
 
@@ -29,7 +30,5 @@ app.get("/health", (req, res) => {
     message: "Receipt Checker API is running 🚀",
   });
 });
-const session = await auth.api.getSession({
-  headers: await headers(), // you need to pass the headers object.
-});
+
 export default app;

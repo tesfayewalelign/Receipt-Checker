@@ -1,4 +1,4 @@
-import { User, ApiKey } from "@prisma/client";
+import { ApiKey, User } from "@prisma/client";
 
 declare global {
   namespace Express {
@@ -8,3 +8,5 @@ declare global {
     }
   }
 }
+
+export {};

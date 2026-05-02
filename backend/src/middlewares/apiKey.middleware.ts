@@ -1,8 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import prisma from "../config/database";
+import { ApiKey } from "../generated/prisma";
+import { User } from "../generated/prisma";
+
+export interface AuthenticatedRequest extends Request {
+  user?: User;
+  apiKey?: ApiKey & { user: User };
+}
 
 export const apiKeyMiddleware = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction,
 ) => {
@@ -34,7 +41,6 @@ export const apiKeyMiddleware = async (
         message: "API key is disabled",
       });
     }
-
     req.user = keyRecord.user;
     req.apiKey = keyRecord;
 
