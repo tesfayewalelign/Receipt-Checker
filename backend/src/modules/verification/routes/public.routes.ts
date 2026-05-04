@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { apiKeyMiddleware } from "../../../middlewares/apiKey.middleware";
 import { rateLimitMiddleware } from "../../../middlewares/rateLimit";
-
 import CBEController from "../controllers/cbe.controller";
 import { TelebirrController } from "../controllers/telebirr.controller";
 import { verifyReceipt } from "../controllers/verify.controller";
@@ -26,5 +25,9 @@ router.get(
   TelebirrController.verify,
 );
 router.post("/verify", apiKeyMiddleware, rateLimitMiddleware, verifyReceipt);
+router.use((req, res, next) => {
+  console.log("📌 publicRoutes hit:", req.path);
+  next();
+});
 
 export default router;

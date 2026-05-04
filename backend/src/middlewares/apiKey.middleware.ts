@@ -14,7 +14,10 @@ export const apiKeyMiddleware = async (
   next: NextFunction,
 ) => {
   try {
+    console.log("🔥 Middleware hit");
+
     const apiKey = req.header("x-api-key");
+    console.log("API KEY:", apiKey);
 
     if (!apiKey) {
       return res.status(401).json({
@@ -46,9 +49,11 @@ export const apiKeyMiddleware = async (
 
     next();
   } catch (error) {
+    console.error("API KEY ERROR:", error);
+
     return res.status(500).json({
       success: false,
-      message: "Failed to validate API key",
+      message: "Internal server error",
     });
   }
 };
