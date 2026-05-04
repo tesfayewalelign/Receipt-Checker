@@ -7,6 +7,8 @@ import verificationRoutes from "./modules/verification/routes/index";
 import publicRoutes from "./modules/verification/routes/public.routes";
 import apiKeyRoutes from "./modules/verification/routes/apiKeys.routes";
 import auth from "./lib/auth";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./docs/swagger";
 
 dotenv.config();
 
@@ -34,6 +36,7 @@ app.use("/api/apikey", apiKeyRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/verification", verificationRoutes);
 
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(errorHandler);
 
 export default app;

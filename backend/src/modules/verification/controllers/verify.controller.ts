@@ -3,6 +3,10 @@ import { Request, Response } from "express";
 import { verifyCBE } from "../../../verifiers/cbe.verifier";
 import { verifyTelebirr } from "../../../verifiers/telebirr.verifier";
 import { verifyAbyssinia } from "../../../verifiers/abyssinia.verifier";
+import { verifyCBEBirr } from "../../../verifiers/cbebirr.verifier";
+import { verifyDashen } from "../../../verifiers/dashen.verifier";
+import { verifyMPesa } from "../../../verifiers/mpesa.verifier";
+import { verifyAwash } from "../../../verifiers/awash.verifier";
 
 export const verifyReceipt = async (req: Request, res: Response) => {
   try {
@@ -13,9 +17,8 @@ export const verifyReceipt = async (req: Request, res: Response) => {
     const accountSuffix = body.accountSuffix;
     const phoneNumber = body.phoneNumber;
     const receiptNumber = body.receiptNumber;
-
+    const filePath = body.filePath;
     const file = (req as any).file;
-
     const fileBuffer = file?.buffer;
     const fileType = file
       ? file.mimetype.includes("pdf")
@@ -38,6 +41,35 @@ export const verifyReceipt = async (req: Request, res: Response) => {
           reference,
           fileBuffer,
           fileType,
+        });
+        break;
+      case "cbebirr":
+        result = await verifyCBEBirr({
+          receiptNumber,
+          phoneNumber,
+          apiKey: req.headers["x-api-key"] as string,
+          fileBuffer,
+          fileType,
+        });
+        break;
+      case "awash":
+        result = await verifyAwash({
+          reference,
+          fileBuffer,
+        });
+        break;
+      case "dashen":
+        result = await verifyDashen({
+          reference,
+          fileBuffer,
+          fileType,
+        });
+        break;
+      case "mpesa":
+        result = await verifyMPesa({
+          reference,
+          fileBuffer,
+          filePath,
         });
         break;
 
