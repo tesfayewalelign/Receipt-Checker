@@ -4,30 +4,18 @@ import { rateLimitMiddleware } from "../../../middlewares/rateLimit";
 import CBEController from "../controllers/cbe.controller";
 import { TelebirrController } from "../controllers/telebirr.controller";
 import { verifyReceipt } from "../controllers/verify.controller";
+import AwashController from "../controllers/awash.controller";
 import multer from "multer";
 
 const upload = multer();
 
 const router = Router();
 
-router.get(
-  "/cbe/check",
+router.post(
+  "/receipt/verify",
   apiKeyMiddleware,
   rateLimitMiddleware,
-  CBEController.verify,
+  verifyReceipt,
 );
-
-router.get(
-  "/telebirr/check",
-  apiKeyMiddleware,
-  rateLimitMiddleware,
-  upload.single("file"),
-  TelebirrController.verify,
-);
-router.post("/verify", apiKeyMiddleware, rateLimitMiddleware, verifyReceipt);
-router.use((req, res, next) => {
-  console.log("📌 publicRoutes hit:", req.path);
-  next();
-});
 
 export default router;

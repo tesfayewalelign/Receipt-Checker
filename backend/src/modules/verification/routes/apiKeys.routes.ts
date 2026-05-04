@@ -28,7 +28,7 @@ router.post("/generate-key", async (req, res) => {
   });
 });
 
-router.get("/test", (req: Request, res: Response) => {
+router.get("/test", apiKeyMiddleware, (req: Request, res: Response) => {
   console.log("🔥 ROUTE HIT");
   res.send("OK");
 });
