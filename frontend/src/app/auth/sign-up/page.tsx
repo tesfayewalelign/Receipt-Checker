@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, Lock, Building2, Chrome, Github } from "lucide-react";
+import { Mail, Lock, Building2, Globe, GitBranch } from "lucide-react";
 
 export default function SignUpPage() {
   const [formData, setFormData] = useState({
@@ -65,7 +65,7 @@ export default function SignUpPage() {
               onClick={() => handleSocialSignup("Google")}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 px-4 py-3 text-sm sm:text-base font-medium text-gray-700 transition-all duration-300 hover:border-gray-400 hover:bg-gray-50"
             >
-              <Chrome className="h-5 w-5" />
+              <Globe className="h-5 w-5" />
               Continue with Google
             </button>
 
@@ -73,7 +73,7 @@ export default function SignUpPage() {
               onClick={() => handleSocialSignup("GitHub")}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 px-4 py-3 text-sm sm:text-base font-medium text-gray-700 transition-all duration-300 hover:border-gray-400 hover:bg-gray-50"
             >
-              <Github className="h-5 w-5" />
+              <GitBranch className="h-5 w-5" />
               Continue with GitHub
             </button>
           </div>

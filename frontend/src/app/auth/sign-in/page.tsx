@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, Lock, Globe } from "lucide-react";
+import { Mail, Lock, Globe, GitBranch } from "lucide-react";
 export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,7 +55,7 @@ export default function SignInPage() {
               onClick={() => handleSocialLogin("Google")}
               className="w-full flex items-center justify-center gap-3 border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 py-3 rounded-xl transition-all duration-300"
             >
-              <Chrome className="w-5 h-5 text-gray-700" />
+              <Globe className="w-5 h-5 text-gray-700" />
 
               <span className="font-medium text-gray-800">
                 Continue with Google
@@ -67,7 +67,7 @@ export default function SignInPage() {
               onClick={() => handleSocialLogin("GitHub")}
               className="w-full flex items-center justify-center gap-3 border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 py-3 rounded-xl transition-all duration-300"
             >
-              <Github className="w-5 h-5 text-gray-700" />
+              <GitBranch className="w-5 h-5 text-gray-700" />
 
               <span className="font-medium text-gray-800">
                 Continue with GitHub
@@ -152,7 +152,7 @@ export default function SignInPage() {
               </label>
 
               <Link
-                href="/forgot-password"
+                href="/auth/forgot-password"
                 className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
               >
                 Forgot password?
@@ -173,7 +173,7 @@ export default function SignInPage() {
             <p className="text-sm sm:text-base text-gray-600">
               Don&apos;t have an account?{" "}
               <Link
-                href="/sign-up"
+                href="/auth/sign-up"
                 className="font-semibold text-emerald-600 hover:text-emerald-700"
               >
                 Sign up for free

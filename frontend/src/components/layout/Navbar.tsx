@@ -1,46 +1,132 @@
 "use client";
 
 import { Menu, X } from "lucide-react";
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const pathname = usePathname();
 
   const navLinks = [
     { name: "Features", href: "/features" },
-
+    { name: "Pricing", href: "/pricing" },
     { name: "API Docs", href: "/api-docs" },
     { name: "About", href: "/about" },
   ];
 
   const isActive = (path: string) => pathname === path;
 
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+    }
+
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [mobileMenuOpen]);
+
   return (
-    <header className="sticky top-0 z-50 bg-white backdrop-blur-xl border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* MAIN NAV BAR */}
-        <div className="flex items-center justify-between h-16">
-          {/* LOGO */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl" />
-            <span className="text-gray-900 font-bold text-lg sm:text-xl">
+    <header className="sticky top-0 z-50 w-full border-b border-gray-200/80 bg-white backdrop-blur-xl">
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        {/* Logo */}
+        <Link
+          href="/"
+          className="flex items-center gap-3 transition-opacity hover:opacity-90"
+        >
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 shadow-lg shadow-emerald-500/20">
+            <span className="text-lg font-bold text-white">R</span>
+          </div>
+
+          <div className="flex flex-col">
+            <span className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl">
               ReceiptCheck
             </span>
+
+            <span className="hidden text-xs text-gray-500 sm:block">
+              Receipt Verification Platform
+            </span>
+          </div>
+        </Link>
+
+        {/* Desktop Navigation */}
+        <nav className="hidden items-center gap-8 lg:flex">
+          {navLinks.map((link) => (
+            <Link
+              key={link.name}
+              href={link.href}
+              className={`relative text-sm font-medium transition-all duration-200 ${
+                isActive(link.href)
+                  ? "text-emerald-600"
+                  : "text-gray-600 hover:text-emerald-600"
+              }`}
+            >
+              {link.name}
+
+              {isActive(link.href) && (
+                <span className="absolute -bottom-2 left-0 h-0.5 w-full rounded-full bg-emerald-500" />
+              )}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Desktop Actions */}
+        <div className="hidden items-center gap-4 lg:flex">
+          <Link
+            href="/auth/sign-in"
+            className="rounded-xl border border-transparent px-5 py-2.5 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-gray-200 hover:bg-gray-50 hover:text-emerald-600"
+          >
+            Sign In
           </Link>
 
-          {/* DESKTOP NAV */}
-          <nav className="hidden md:flex items-center gap-6 lg:gap-8">
+          <Link
+            href="/auth/sign-up"
+            className="rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:scale-[1.02] hover:from-emerald-600 hover:to-cyan-600 hover:shadow-xl"
+          >
+            Get Started
+          </Link>
+        </div>
+
+        {/* Mobile Menu Button */}
+        <button
+          type="button"
+          aria-label="Toggle Menu"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition-all duration-200 hover:bg-gray-50 lg:hidden"
+        >
+          {mobileMenuOpen ? (
+            <X className="h-5 w-5" />
+          ) : (
+            <Menu className="h-5 w-5" />
+          )}
+        </button>
+      </div>
+
+      {/* Mobile Menu */}
+      <div
+        className={`overflow-hidden transition-all duration-300 lg:hidden ${
+          mobileMenuOpen
+            ? "max-h-screen border-t border-gray-200 opacity-100"
+            : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="bg-white px-4 py-6 sm:px-6">
+          <nav className="flex flex-col gap-2">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
-                className={`text-sm lg:text-base font-medium transition-colors ${
+                onClick={() => setMobileMenuOpen(false)}
+                className={`rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
                   isActive(link.href)
-                    ? "text-emerald-600"
-                    : "text-gray-600 hover:text-emerald-600"
+                    ? "bg-emerald-50 text-emerald-600"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-emerald-600"
                 }`}
               >
                 {link.name}
@@ -48,63 +134,23 @@ export default function Header() {
             ))}
           </nav>
 
-          {/* DESKTOP ACTIONS */}
-          <div className="hidden md:flex items-center gap-3">
-            <button className="text-sm font-medium text-gray-700 hover:text-emerald-600 transition">
+          {/* Mobile Buttons */}
+          <div className="mt-6 flex flex-col gap-3">
+            <Link
+              href="/sign-in"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"
+            >
               Sign In
-            </button>
+            </Link>
 
-            <button className="text-sm font-semibold bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white px-4 lg:px-6 py-2 rounded-lg shadow-md hover:shadow-lg transition-all">
+            <Link
+              href="/sign-up"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:from-emerald-600 hover:to-cyan-600"
+            >
               Get Started
-            </button>
-          </div>
-
-          {/* MOBILE BUTTON */}
-          <button
-            className="md:hidden p-2 text-gray-700"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? (
-              <X className="w-6 h-6" />
-            ) : (
-              <Menu className="w-6 h-6" />
-            )}
-          </button>
-        </div>
-
-        {/* MOBILE MENU */}
-        <div
-          className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${
-            mobileMenuOpen ? "max-h-96 opacity-100 py-4" : "max-h-0 opacity-0"
-          }`}
-        >
-          <div className="border-t border-gray-200 pt-4 flex flex-col gap-4">
-            {/* LINKS */}
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`text-base font-medium transition-colors ${
-                  isActive(link.href)
-                    ? "text-emerald-600"
-                    : "text-gray-700 hover:text-emerald-600"
-                }`}
-              >
-                {link.name}
-              </Link>
-            ))}
-
-            {/* ACTIONS */}
-            <div className="flex flex-col gap-3 pt-4">
-              <button className="w-full border border-gray-300 text-gray-700 py-2 rounded-lg font-medium hover:border-emerald-500 hover:text-emerald-600 transition">
-                Sign In
-              </button>
-
-              <button className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-2 rounded-lg font-semibold shadow-md">
-                Get Started
-              </button>
-            </div>
+            </Link>
           </div>
         </div>
       </div>
