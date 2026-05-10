@@ -137,7 +137,7 @@ export default function Header() {
           {/* Mobile Buttons */}
           <div className="mt-6 flex flex-col gap-3">
             <Link
-              href="/sign-in"
+              href="/auth/sign-in"
               onClick={() => setMobileMenuOpen(false)}
               className="flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"
             >
@@ -145,7 +145,7 @@ export default function Header() {
             </Link>
 
             <Link
-              href="/sign-up"
+              href="/auth/sign-up"
               onClick={() => setMobileMenuOpen(false)}
               className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:from-emerald-600 hover:to-cyan-600"
             >

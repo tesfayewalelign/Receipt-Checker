@@ -52,7 +52,7 @@ export default function FeaturesPage() {
   ];
 
   return (
-    <div className="pt-16 sm:pt-20">
+    <div className="pt-0 ">
       {/* HERO */}
       <section className="bg-gradient-to-br from-[#0A2463] via-[#1e3a8a] to-[#0A2463] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
@@ -68,7 +68,7 @@ export default function FeaturesPage() {
       </section>
 
       {/* FEATURES COMPONENT */}
-      <section className="py-12 sm:py-20">
+      <section className="bg-white py-12 sm:py-20">
         <Features />
       </section>
 
