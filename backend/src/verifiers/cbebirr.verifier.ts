@@ -2,14 +2,15 @@ import axios from "axios";
 import https from "https";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 import Tesseract from "tesseract.js";
-import fs from "fs";
 import logger from "../utils/logger";
 
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = undefined;
 
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: process.env.ALLOW_SELF_SIGNED_CERTS !== "true",
+});
 
-const pdfParse = require("pdf-parse");
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface CBEBirrVerifyResult {
   success: boolean;
@@ -34,53 +35,121 @@ export interface CBEBirrVerifyResult {
 async function extractReceiptFromPDFBuffer(
   buffer: Buffer,
 ): Promise<string | null> {
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) })
-    .promise;
-  let rawText = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    rawText += content.items.map((item: any) => item.str).join(" ") + " ";
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) })
+      .promise;
+
+    let rawText = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      rawText += content.items.map((item: any) => item.str).join(" ") + " ";
+    }
+
+    // Match CBE receipt number format: CL followed by alphanumeric chars
+    const match = rawText.match(/\bCL[A-Z0-9]{5,}\b/i);
+    if (!match) {
+      logger.warn("[CBEBirr] No CL receipt number found in PDF");
+      return null;
+    }
+
+    return match[0].toUpperCase();
+  } catch (err: any) {
+    logger.error("[CBEBirr] PDF extraction error:", err.message);
+    return null;
   }
-
-  const cleanText = rawText.replace(/[^A-Z0-9]/gi, "");
-  const matches = cleanText.match(/\b[A-Z]{2,}[0-9A-Z]{5,}\b/g);
-
-  if (!matches || matches.length === 0) return null;
-  return matches[matches.length - 1];
 }
 
 async function extractReceiptFromImageBuffer(
   buffer: Buffer,
 ): Promise<string | null> {
-  const result = await Tesseract.recognize(buffer, "eng");
-  const text = result.data.text.replace(/\s+/g, "");
-  const match = text.match(/CL[A-Z0-9]{5,}/i);
-  return match ? match[0] : null;
+  try {
+    const result = await Tesseract.recognize(buffer, "eng");
+    const text = result.data.text.replace(/\s+/g, "");
+    const match = text.match(/CL[A-Z0-9]{5,}/i);
+    if (!match) {
+      logger.warn("[CBEBirr] No CL receipt number found in image");
+      return null;
+    }
+    return match[0].toUpperCase();
+  } catch (err: any) {
+    logger.error("[CBEBirr] Image extraction error:", err.message);
+    return null;
+  }
 }
+
+function sanitizePhoneNumber(phone: string): string {
+  const cleaned = phone.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+
+  if (cleaned.startsWith("+251")) {
+    return "0" + cleaned.slice(4); // +251911... → 0911...
+  }
+  if (cleaned.startsWith("251")) {
+    return "0" + cleaned.slice(3); // 251911... → 0911...
+  }
+  return cleaned; // already local format
+}
+
+function parseCBEDate(raw: string): Date | null {
+  try {
+    // Format: YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS
+    const parts = raw.trim().split(/[\s\-:]/);
+    if (parts.length < 5) return null;
+
+    return new Date(
+      Number(parts[0]), // year
+      Number(parts[1]) - 1, // month (0-based)
+      Number(parts[2]), // day
+      Number(parts[3]), // hour
+      Number(parts[4]), // minute
+      Number(parts[5] ?? 0), // second
+    );
+  } catch {
+    return null;
+  }
+}
+
+// ── PDF text extractor (shared helper) ───────────────────────────────────────
+async function extractTextFromPDFBuffer(buffer: Buffer): Promise<string> {
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) })
+    .promise;
+
+  let text = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map((item: any) => item.str).join(" ") + "\n";
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+// ── Main verifier ─────────────────────────────────────────────────────────────
 
 export async function verifyCBEBirr(input: {
   receiptNumber?: string | null;
   phoneNumber: string;
-  apiKey: string;
+
   fileBuffer?: Buffer;
   fileType?: "pdf" | "image";
 }): Promise<CBEBirrVerifyResult> {
   try {
-    let { receiptNumber, phoneNumber, fileBuffer, fileType } = input as {
-      receiptNumber?: string | null;
-      phoneNumber: string;
-      fileBuffer?: Buffer;
-      fileType?: "pdf" | "image";
-    };
+    let { receiptNumber, phoneNumber, fileBuffer, fileType } = input;
 
+    // ── Validate phone number ───────────────────────────────────────────────
     if (!phoneNumber) {
+      return { success: false, error: "Phone number is required" };
+    }
+
+    const cleanPhone = sanitizePhoneNumber(phoneNumber);
+    if (!/^0[79]\d{8}$/.test(cleanPhone)) {
       return {
         success: false,
-        error: "Phone number is required",
+        error: `Invalid phone number format: ${phoneNumber}. Expected Ethiopian mobile number.`,
       };
     }
 
+    // ── Extract receipt number from file if not provided directly ───────────
     if (!receiptNumber) {
       if (!fileBuffer) {
         return {
@@ -91,26 +160,18 @@ export async function verifyCBEBirr(input: {
 
       logger.info("[CBEBirr] Extracting receipt number from uploaded file");
 
-      let extracted: string | null = null;
-
       if (fileType === "pdf") {
-        const result = await extractReceiptFromPDFBuffer(fileBuffer);
-        extracted = result ?? null;
+        receiptNumber = await extractReceiptFromPDFBuffer(fileBuffer);
       } else if (fileType === "image") {
-        const result = await extractReceiptFromImageBuffer(fileBuffer);
-        extracted = result ?? null;
+        receiptNumber = await extractReceiptFromImageBuffer(fileBuffer);
       } else {
         return {
           success: false,
-          error: "Unsupported file type",
+          error: "Unsupported file type. Use pdf or image.",
         };
       }
 
-      receiptNumber = extracted;
-
       if (!receiptNumber) {
-        logger.warn("[CBEBirr] Receipt extraction failed");
-
         return {
           success: false,
           error: "Could not extract receipt number from file",
@@ -120,89 +181,121 @@ export async function verifyCBEBirr(input: {
       logger.info(`[CBEBirr] Extracted receipt number: ${receiptNumber}`);
     }
 
-    const url = `https://cbepay1.cbe.com.et/aureceipt?TID=${receiptNumber}&PH=${phoneNumber}`;
+    // ── Fetch PDF receipt from CBE ──────────────────────────────────────────
+    const url = `https://cbepay1.cbe.com.et/aureceipt?TID=${encodeURIComponent(receiptNumber)}&PH=${encodeURIComponent(cleanPhone)}`;
 
-    logger.info(`[CBEBirr] Fetching receipt ${receiptNumber}`);
+    logger.info(`[CBEBirr] Fetching receipt for: ${receiptNumber}`);
 
     const response = await axios.get<ArrayBuffer>(url, {
       responseType: "arraybuffer",
       timeout: 30000,
       httpsAgent,
-      headers: { "User-Agent": "Mozilla/5.0" },
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      },
     });
 
     if (!response.data) {
       return { success: false, error: "Empty response from CBE server" };
     }
 
-    if (!response.headers["content-type"]?.includes("pdf")) {
-      return { success: false, error: "Response is not a valid PDF" };
+    const contentType = response.headers["content-type"] ?? "";
+    if (!contentType.includes("pdf")) {
+      logger.warn("[CBEBirr] Response content-type:", contentType);
+      return {
+        success: false,
+        error:
+          "CBE server did not return a PDF. Receipt may not exist or phone number is wrong.",
+      };
     }
 
-    const pdf = await pdfjsLib.getDocument({
-      data: new Uint8Array(response.data),
-    }).promise;
+    // ── Parse the PDF receipt ───────────────────────────────────────────────
+    const text = await extractTextFromPDFBuffer(Buffer.from(response.data));
 
-    let text = "";
+    logger.info(
+      "[CBEBirr] Extracted PDF text (first 300 chars):",
+      text.slice(0, 300),
+    );
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-
-      text += content.items.map((item: any) => item.str).join(" ") + "\n";
-    }
-
-    text = text.replace(/\s+/g, " ").trim();
-
+    // Helper: extract value after a label
     const extract = (regex: RegExp): string | null =>
       text.match(regex)?.[1]?.trim() ?? null;
 
-    const receiptNumberParsed = extract(/(CL[A-Z0-9]+)/i);
-
-    const dateMatch = text.match(/\d{4}-\d{2}-\d{2}\s*\d{2}:\d{2}/);
-    const transactionDateParsed = dateMatch ? new Date(dateMatch[0]) : null;
-
-    const allAmounts = [...text.matchAll(/(\d+\.\d{2})/g)].map((m) =>
-      parseFloat(m[1]),
+    // FIX 6: Parse date explicitly
+    const dateMatch = text.match(
+      /(\d{4}-\d{2}-\d{2}\s*\d{2}:\d{2}(?::\d{2})?)/,
     );
+    const transactionDate = dateMatch ? parseCBEDate(dateMatch[1]) : null;
 
-    const amountParsed = allAmounts.length ? allAmounts[0] : null;
-
-    const extractAfterKeyword = (keyword: string): number | null => {
+    // FIX 7: Extract amounts by label, not by position
+    // "position 0" is unreliable — the first number could be an account number
+    const extractAmount = (keyword: string): number | null => {
       const match = text.match(
-        new RegExp(`${keyword}\\s*(\\d+\\.\\d{2})`, "i"),
+        new RegExp(`${keyword}[^\\d]*(\\d+\\.\\d{2})`, "i"),
       );
       return match ? parseFloat(match[1]) : null;
     };
+
+    const paidAmount = extractAmount("Paid[\\s]*[Aa]mount");
+    const serviceCharge = extractAmount("Service[\\s]*Charge");
+    const vat = extractAmount("VAT");
+    const totalPaidAmount = extractAmount("Total[\\s]*Paid[\\s]*Amount");
+
+    // Use "Amount" label for main amount, fall back to first decimal number
+    const amount =
+      extractAmount("(?<![A-Za-z])Amount(?![A-Za-z])") ??
+      (() => {
+        const all = [...text.matchAll(/(\d+\.\d{2})/g)].map((m) =>
+          parseFloat(m[1]),
+        );
+        // Pick smallest non-zero amount (least likely to be total)
+        return all.filter((n) => n > 0).sort((a, b) => a - b)[0] ?? null;
+      })();
 
     const result: CBEBirrVerifyResult = {
       success: true,
       customerName: extract(/Debit\s*Account\s*\d+\s*-\s*(.*?)\s+Credit/i),
       debitAccount: extract(/Debit\s*Account\s*([0-9]+)/i),
-      creditAccount: extract(/Credit\s*Account\s*([0-9\*]+)/i),
+      creditAccount: extract(/Credit\s*Account\s*([0-9*]+)/i),
       receiverName: extract(/Receiver\s*Name\s*(.*?)\s+Order/i),
       orderId: extract(/Order\s*ID\s*([A-Z0-9]+)/i),
       transactionStatus: extract(/Transaction\s*Status\s*(\w+)/i),
-      receiptNumber: receiptNumberParsed,
-      transactionDate: transactionDateParsed,
-      amount: amountParsed,
-      paidAmount: extractAfterKeyword("Paid amount"),
-      serviceCharge: extractAfterKeyword("Service Charge"),
-      vat: extractAfterKeyword("VAT"),
+      receiptNumber: extract(/(CL[A-Z0-9]+)/i) ?? receiptNumber,
+      transactionDate,
+      amount,
+      paidAmount,
+      serviceCharge,
+      vat,
       totalPaidAmount:
-        extractAfterKeyword("Total Paid Amount") ??
-        (allAmounts.length ? Math.max(...allAmounts) : null),
+        totalPaidAmount ??
+        (() => {
+          const all = [...text.matchAll(/(\d+\.\d{2})/g)].map((m) =>
+            parseFloat(m[1]),
+          );
+          return all.length ? Math.max(...all) : null;
+        })(),
       paymentReason: extract(/Payment\s*Reason\s*(.*?)\s+Payment\s*Channel/i),
       paymentChannel: extract(/Payment\s*Channel\s*(\w+)/i),
     };
 
+    // Warn if critical fields are missing
+    if (
+      !result.amount ||
+      !result.transactionDate ||
+      !result.transactionStatus
+    ) {
+      logger.warn("[CBEBirr] Some fields could not be parsed from PDF:", {
+        amount: result.amount,
+        transactionDate: result.transactionDate,
+        transactionStatus: result.transactionStatus,
+      });
+    }
+
+    logger.info(`[CBEBirr] ✅ Verification SUCCESS for: ${receiptNumber}`);
     return result;
   } catch (err: any) {
     logger.error("[CBEBirr] Verification failed:", err.message);
-
-    return {
-      success: false,
-      error: err?.message || "Verification failed",
-    };
+    return { success: false, error: err?.message || "Verification failed" };
   }
 }

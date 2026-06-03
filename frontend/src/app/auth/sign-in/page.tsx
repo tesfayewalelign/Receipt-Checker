@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { api } from "@/lib/api";
+import { useRouter } from "next/navigation";
 import { Mail, Lock, Globe, GitBranch } from "lucide-react";
 export default function SignInPage() {
   const [email, setEmail] = useState("");

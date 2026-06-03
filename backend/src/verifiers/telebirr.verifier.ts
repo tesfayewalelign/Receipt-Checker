@@ -1,12 +1,8 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
-import puppeteer from "puppeteer-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import Tesseract from "tesseract.js";
-import { VerifyResult } from "./cbe.verifier";
-import logger from "../utils/logger";
 
-puppeteer.use(StealthPlugin());
+// ── Types ─────────────────────────────────────────────────────────────────
 
 export interface TelebirrReceipt {
   reference: string;
@@ -18,6 +14,23 @@ export interface TelebirrReceipt {
   status: string;
   date: Date;
 }
+
+export interface VerifyResult {
+  success: boolean;
+  data?: {
+    payer: string;
+    payerAccount: string;
+    receiver: string;
+    receiverAccount: string;
+    amount: number;
+    date: Date;
+    reference: string;
+    reason?: string;
+  };
+  error?: string;
+}
+
+// ── Reference Extractors ──────────────────────────────────────────────────
 
 export async function extractReferenceFromPdf(buffer: Buffer): Promise<string> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.js");
@@ -54,109 +67,84 @@ function normalizeReference(reference: string): string {
 }
 
 export class TelebirrVerifier {
-  private readonly BASE_URL = "https://transactioninfo.ethiotelecom.et/receipt";
-
   async verify(reference: string): Promise<TelebirrReceipt | null> {
     if (!reference) return null;
 
     const cleanedRef = normalizeReference(reference);
+    console.log(`[verifier] Verifying reference: ${cleanedRef}`);
 
-    logger.info(`Verifying Telebirr: ${cleanedRef}`);
-
-    let html = await this.fetchReceiptViaProxy(cleanedRef);
-
-    if (!html) {
-      logger.warn("Proxy failed, trying Puppeteer");
-      html = await this.fetchReceipt(cleanedRef);
-    }
+    // Get HTML from proxy (proxy is on ET network, so it can access the site)
+    const html = await this.fetchFromProxy(cleanedRef);
 
     if (!html) {
-      logger.warn("Puppeteer failed, trying Axios");
-      html = await this.fetchReceiptFallback(cleanedRef);
-    }
-
-    if (!html) {
-      logger.warn("All fetch methods failed");
+      console.error("[verifier] Could not get HTML from proxy");
       return null;
     }
 
     const receipt = this.parseReceipt(html, cleanedRef);
 
-    if (!receipt || !this.validateReceipt(receipt)) {
-      logger.warn("Receipt validation failed");
+    if (!receipt) {
+      console.error("[verifier] Failed to parse receipt from HTML");
       return null;
     }
 
-    logger.info(`Telebirr verification SUCCESS: ${cleanedRef}`);
+    if (!this.validateReceipt(receipt)) {
+      console.error("[verifier] Receipt validation failed:", receipt);
+      return null;
+    }
 
+    console.log(`[verifier] ✅ Verification SUCCESS for: ${cleanedRef}`);
     return receipt;
   }
 
-  private async fetchReceiptViaProxy(
-    reference: string,
-  ): Promise<string | null> {
-    try {
-      const url = process.env.TELEBIRR_PROXY_URL;
-      const key = process.env.TELEBIRR_PROXY_KEY;
+  private async fetchFromProxy(reference: string): Promise<string | null> {
+    const proxyUrl = process.env.TELEBIRR_PROXY_URL;
 
-      if (!url || !key) {
-        logger.warn("Proxy env missing");
-        return null;
-      }
+    if (!proxyUrl) {
+      console.error(
+        "[verifier] TELEBIRR_PROXY_URL is not set in your .env file!\n" +
+          "           Add: TELEBIRR_PROXY_URL=http://localhost:4000\n" +
+          "           Or the public URL from localhost.run / ngrok",
+      );
+      return null;
+    }
+
+    try {
+      console.log(`[verifier] Calling proxy at: ${proxyUrl}/verify`);
 
       const response = await axios.post(
-        url,
+        `${proxyUrl}/verify`,
         { reference },
         {
           headers: {
-            "x-api-key": key,
+            "Content-Type": "application/json",
           },
-          timeout: 30000,
+          timeout: 45000, // 45 seconds — proxy may need time to use Puppeteer
         },
       );
 
-      return response.data?.html ?? null;
-    } catch (err: any) {
-      logger.error("Proxy fetch failed:", err.message);
-      return null;
-    }
-  }
+      if (response.data?.error) {
+        console.error("[verifier] Proxy returned error:", response.data.error);
+        return null;
+      }
 
-  private async fetchReceipt(reference: string): Promise<string | null> {
-    try {
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
-      const page = await browser.newPage();
-      await page.setUserAgent(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-      );
-      await page.goto(`${this.BASE_URL}/${reference}`, {
-        waitUntil: "networkidle2",
-        timeout: 60000,
-      });
-      await page.waitForSelector("table", { timeout: 60000 });
-      const html = await page.content();
-      await browser.close();
-      return html;
-    } catch (err: any) {
-      logger.error("Puppeteer fetch failed:", err.message);
-      return null;
-    }
-  }
+      if (!response.data?.html) {
+        console.error("[verifier] Proxy returned no HTML");
+        return null;
+      }
 
-  private async fetchReceiptFallback(
-    reference: string,
-  ): Promise<string | null> {
-    try {
-      const res = await axios.get(`${this.BASE_URL}/${reference}`, {
-        timeout: 30000,
-      });
-      if (res.status === 200 && res.data) return res.data;
-      return null;
+      return response.data.html;
     } catch (err: any) {
-      logger.error("Axios fallback fetch failed:", err.message);
+      if (axios.isAxiosError(err)) {
+        console.error(
+          `[verifier] Proxy request failed [${err.response?.status ?? "no response"}]: ${err.message}`,
+        );
+      } else {
+        console.error(
+          "[verifier] Unexpected error calling proxy:",
+          err.message,
+        );
+      }
       return null;
     }
   }
@@ -167,41 +155,82 @@ export class TelebirrVerifier {
   ): TelebirrReceipt | null {
     try {
       const $ = cheerio.load(html);
+
+      let amount: number | null = null;
+      let date: Date | null = null;
+      let status: string | null = null;
+      let receiptNo: string | null = null;
+      let payer: string | null = null;
+      let receiver: string | null = null;
+
+      // Read structured table rows first
+      $("table tr").each((_, row) => {
+        const cells = $(row).find("td");
+        if (cells.length < 2) return;
+
+        const label = cells.eq(0).text().trim().toLowerCase();
+        const value = cells.eq(1).text().trim();
+
+        if (/amount/i.test(label)) {
+          const m = value.match(/([\d,]+\.?\d*)/);
+          if (m) amount = parseFloat(m[1].replace(/,/g, ""));
+        } else if (/date|time/i.test(label)) {
+          date = parseEtDate(value);
+        } else if (/status/i.test(label)) {
+          status = value;
+        } else if (/receipt.*no|transaction.*id/i.test(label)) {
+          receiptNo = value;
+        } else if (/payer|sender|from/i.test(label)) {
+          payer = value;
+        } else if (/receiver|recipient|to/i.test(label)) {
+          receiver = value;
+        }
+      });
+
+      // Fall back to body text search if table parsing missed anything
       const bodyText = $("body").text().replace(/\s+/g, " ");
 
-      const amountMatch = bodyText.match(/([\d,]+\.\d{2})\s?(Birr|ETB)/i);
-      const dateMatch = bodyText.match(/\d{2}-\d{2}-\d{4}\s\d{2}:\d{2}:\d{2}/);
-      const statusMatch = bodyText.match(
-        /(success|successful|paid|complete|completed|failed|pending)/i,
-      );
-
-      const amount = amountMatch
-        ? parseFloat(amountMatch[1].replace(/,/g, ""))
-        : NaN;
-      let date: Date | null = null;
-      if (dateMatch) {
-        const parts = dateMatch[0].split(/[- :]/);
-        date = new Date(
-          Number(parts[2]),
-          Number(parts[1]) - 1,
-          Number(parts[0]),
-          Number(parts[3]),
-          Number(parts[4]),
-          Number(parts[5]),
-        );
+      if (!amount) {
+        const m = bodyText.match(/([\d,]+\.\d{2})\s?(?:Birr|ETB)/i);
+        if (m) amount = parseFloat(m[1].replace(/,/g, ""));
       }
-      const status = statusMatch ? statusMatch[0] : undefined;
-      if (!amount || isNaN(amount) || !date || !status) return null;
+
+      if (!date) {
+        const m = bodyText.match(
+          /\d{2}[\/\-]\d{2}[\/\-]\d{4}\s\d{2}:\d{2}(?::\d{2})?/,
+        );
+        if (m) date = parseEtDate(m[0]);
+      }
+
+      if (!status) {
+        const m = bodyText.match(
+          /(success|successful|paid|complete|completed|failed|pending)/i,
+        );
+        if (m) status = m[0];
+      }
+
+      // All three are required
+      if (!amount || isNaN(amount) || !date || !status) {
+        console.error("[verifier] parseReceipt: missing fields", {
+          amount,
+          date,
+          status,
+        });
+        return null;
+      }
 
       return {
         reference,
-        receiptNo: reference,
+        receiptNo: receiptNo ?? reference,
         amount,
         totalPaid: amount,
+        payer: payer ?? undefined,
+        receiver: receiver ?? undefined,
         status,
         date,
       };
-    } catch {
+    } catch (err: any) {
+      console.error("[verifier] parseReceipt threw:", err.message);
       return null;
     }
   }
@@ -212,12 +241,30 @@ export class TelebirrVerifier {
       !receipt.amount ||
       receipt.amount <= 0 ||
       !receipt.date
-    )
+    ) {
       return false;
-    const validStatus = ["success", "paid", "complete"];
-    return validStatus.some((word) =>
+    }
+    const successWords = ["success", "paid", "complete", "completed"];
+    return successWords.some((word) =>
       receipt.status.toLowerCase().includes(word),
     );
+  }
+}
+
+function parseEtDate(raw: string): Date | null {
+  const parts = raw.split(/[\/\- :]/);
+  if (parts.length < 5) return null;
+  try {
+    return new Date(
+      Number(parts[2]), // year
+      Number(parts[1]) - 1, // month (0-based)
+      Number(parts[0]), // day
+      Number(parts[3]), // hour
+      Number(parts[4]), // minute
+      Number(parts[5] ?? 0), // second
+    );
+  } catch {
+    return null;
   }
 }
 
@@ -228,18 +275,28 @@ export async function verifyTelebirr(payload: {
 }): Promise<VerifyResult> {
   try {
     let reference = payload.reference;
+
     if (!reference && payload.fileBuffer) {
       reference =
         payload.fileType === "pdf"
           ? await extractReferenceFromPdf(payload.fileBuffer)
           : await extractReferenceFromImage(payload.fileBuffer);
     }
-    if (!reference)
-      throw new Error("Reference not provided or could not be extracted");
+
+    if (!reference) {
+      throw new Error(
+        "Reference not provided and could not be extracted from file",
+      );
+    }
 
     const verifier = new TelebirrVerifier();
     const receipt = await verifier.verify(reference);
-    if (!receipt) throw new Error("Telebirr verification failed");
+
+    if (!receipt) {
+      throw new Error(
+        "Telebirr verification failed — receipt not found or invalid",
+      );
+    }
 
     return {
       success: true,
