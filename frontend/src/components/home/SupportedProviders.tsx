@@ -1,5 +1,6 @@
 import { Smartphone, Building2, Wallet } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function SupportedProviders() {
   const providers = [
@@ -8,6 +9,7 @@ export default function SupportedProviders() {
       abbr: "CBE",
       category: "Bank",
       icon: Building2,
+      logo: "/banks/cbe.png",
       id: "cbe",
     },
     {
@@ -15,6 +17,7 @@ export default function SupportedProviders() {
       abbr: "Telebirr",
       category: "Mobile Money",
       icon: Smartphone,
+      logo: "/banks/TeleBirr Logo.png",
       id: "telebirr",
     },
     {
@@ -22,6 +25,7 @@ export default function SupportedProviders() {
       abbr: "CBE Birr",
       category: "Mobile Money",
       icon: Wallet,
+      logo: "/banks/CBE Birr Logo.png",
       id: "cbe-birr",
     },
     {
@@ -29,6 +33,7 @@ export default function SupportedProviders() {
       abbr: "BoA",
       category: "Bank",
       icon: Building2,
+      logo: "/banks/Abyssinia.png",
       id: "boa",
     },
     {
@@ -36,6 +41,7 @@ export default function SupportedProviders() {
       abbr: "Awash",
       category: "Bank",
       icon: Building2,
+      logo: "/banks/awash.png",
       id: "awash",
     },
     {
@@ -43,6 +49,7 @@ export default function SupportedProviders() {
       abbr: "Dashen",
       category: "Bank",
       icon: Building2,
+      logo: "/banks/Dashen.png",
       id: "dashen",
     },
     {
@@ -50,6 +57,7 @@ export default function SupportedProviders() {
       abbr: "M-Pesa",
       category: "Mobile Money",
       icon: Smartphone,
+      logo: "/banks/MPesa.png",
       id: "mpesa",
     },
     {
@@ -84,10 +92,19 @@ export default function SupportedProviders() {
 
             const content = (
               <div className="flex flex-col items-center text-center gap-3">
-                <div className="w-14 h-14 bg-gradient-to-br from-[#0A2463] to-[#1e3a8a] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Icon className="w-7 h-7 text-white" />
+                <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform overflow-hidden">
+                  {provider.logo ? (
+                    <Image
+                      src={provider.logo}
+                      alt={provider.abbr}
+                      width={40}
+                      height={40}
+                      className="object-contain"
+                    />
+                  ) : (
+                    <Icon className="w-7 h-7 text-gray-700" />
+                  )}
                 </div>
-
                 <div>
                   <div className="text-gray-900" style={{ fontWeight: 600 }}>
                     {provider.abbr}
