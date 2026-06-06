@@ -13,14 +13,10 @@ import {
   X,
 } from "lucide-react";
 
-/* =========================
-   PROVIDERS CONFIG
-========================= */
 const providers = {
   cbe: {
     name: "Commercial Bank of Ethiopia",
-    color: "from-blue-600 to-blue-700",
-
+    color: "from-[#2E0F4F] to-[#4B1D6B]",
     referenceLabel: "Reference No",
     referencePlaceholder: "FT123456789",
     referenceHint: "Starts with FT....",
@@ -30,8 +26,7 @@ const providers = {
 
   telebirr: {
     name: "Telebirr",
-    color: "from-orange-500 to-orange-600",
-
+    color: "from-[#003366] to-[#004C99]",
     referenceLabel: "Transaction Number",
     referencePlaceholder: "TBR123456789",
     referenceHint: "Telebirr transaction number",
@@ -41,19 +36,16 @@ const providers = {
 
   "cbe-birr": {
     name: "CBE Birr",
-    color: "from-green-600 to-green-700",
-
+    color: "from-[#2E0F4F] to-[#4B1D6B]",
     referenceLabel: "Receipt Number",
     referencePlaceholder: "CBB123456789",
     referenceHint: "CBE Birr receipt number",
-
     fields: ["reference", "phoneNumber", "image"],
   },
 
   mpesa: {
     name: "M-Pesa Ethiopia",
-    color: "from-green-500 to-green-600",
-
+    color: "from-[#DC143C] to-[#FF4D6D]",
     referenceLabel: "Transaction Number",
     referencePlaceholder: "MPESA123456",
     referenceHint: "M-Pesa transaction reference",
@@ -63,7 +55,7 @@ const providers = {
 
   boa: {
     name: "Bank of Abyssinia",
-    color: "from-purple-600 to-purple-700",
+    color: "from-[#FFD700] to-[#FFC107]",
 
     referenceLabel: "Reference No",
     referencePlaceholder: "BOA123456789",
@@ -74,7 +66,7 @@ const providers = {
 
   awash: {
     name: "Awash Bank",
-    color: "from-red-600 to-red-700",
+    color: "from-[#0A2463] to-[#1E3A8A]",
 
     referenceLabel: "Reference No",
     referencePlaceholder: "UBH123456789",
@@ -85,7 +77,7 @@ const providers = {
 
   dashen: {
     name: "Dashen Bank",
-    color: "from-indigo-600 to-indigo-700",
+    color: "from-[#005BAA] to-[#003E7E]",
 
     referenceLabel: "Reference No",
     referencePlaceholder: "DSH123456789",
@@ -95,9 +87,6 @@ const providers = {
   },
 };
 
-/* =========================
-   COMPONENT
-========================= */
 export default function VerifyReceiptPage() {
   const params = useParams();
   const providerId = params.providerId as string;
@@ -115,17 +104,11 @@ export default function VerifyReceiptPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
 
-  /* =========================
-     INPUT HANDLER
-  ========================= */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  /* =========================
-     IMAGE UPLOAD
-  ========================= */
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -144,9 +127,6 @@ export default function VerifyReceiptPage() {
     setImagePreview(null);
   };
 
-  /* =========================
-     SUBMIT (SIMULATION)
-  ========================= */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsVerifying(true);
@@ -172,9 +152,6 @@ export default function VerifyReceiptPage() {
     }, 2000);
   };
 
-  /* =========================
-     PROVIDER NOT FOUND
-  ========================= */
   if (!provider) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -197,9 +174,6 @@ export default function VerifyReceiptPage() {
     );
   }
 
-  /* =========================
-     UI
-  ========================= */
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
       <div className="max-w-4xl mx-auto px-6 py-12">

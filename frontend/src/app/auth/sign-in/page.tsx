@@ -1,29 +1,48 @@
 "use client";
-
 import { useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, Globe, GitBranch } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
+
 export default function SignInPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    console.log({
-      email,
-      password,
-      rememberMe,
-    });
+    await authClient.signIn.email(
+      {
+        email,
+        password,
+        callbackURL: "/dashboard",
+        rememberMe,
+      },
+      {
+        onRequest: () => {
+          console.log("Signing in...");
+        },
 
-    // Add authentication logic here
+        onSuccess: () => {
+          router.push("/dashboard");
+        },
+
+        onError: (ctx) => {
+          alert(ctx.error.message);
+        },
+      },
+    );
   };
 
-  const handleSocialLogin = (provider: string) => {
-    console.log(`Continue with ${provider}`);
+  const handleSocialLogin = async (provider: "google" | "github") => {
+    await authClient.signIn.social({
+      provider,
+      callbackURL: "/dashboard",
+    });
   };
 
   return (
@@ -54,23 +73,22 @@ export default function SignInPage() {
           <div className="space-y-3">
             {/* Google */}
             <button
-              onClick={() => handleSocialLogin("Google")}
+              type="button"
+              onClick={() => handleSocialLogin("google")}
               className="w-full flex items-center justify-center gap-3 border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 py-3 rounded-xl transition-all duration-300"
             >
               <Globe className="w-5 h-5 text-gray-700" />
-
               <span className="font-medium text-gray-800">
                 Continue with Google
               </span>
             </button>
 
-            {/* GitHub */}
             <button
-              onClick={() => handleSocialLogin("GitHub")}
+              type="button"
+              onClick={() => handleSocialLogin("github")}
               className="w-full flex items-center justify-center gap-3 border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 py-3 rounded-xl transition-all duration-300"
             >
               <GitBranch className="w-5 h-5 text-gray-700" />
-
               <span className="font-medium text-gray-800">
                 Continue with GitHub
               </span>
@@ -111,7 +129,7 @@ export default function SignInPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full h-12 sm:h-13 rounded-xl border border-gray-300 bg-white pl-12 pr-4 text-sm sm:text-base outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  className="w-full h-12 rounded-xl border border-gray-300 bg-white pl-12 pr-4 text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                 />
               </div>
             </div>
@@ -135,7 +153,7 @@ export default function SignInPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full h-12 sm:h-13 rounded-xl border border-gray-300 bg-white pl-12 pr-4 text-sm sm:text-base outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  className="w-full h-12 sm:h-13 rounded-xl border border-gray-300 bg-white pl-12 pr-4 text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                 />
               </div>
             </div>

@@ -1,17 +1,21 @@
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import router from "next/dist/shared/lib/router/router";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 
 export default function SignOutPage() {
   const router = useRouter();
-}
 
-await authClient.signOut({
-  fetchOptions: {
-    onSuccess: () => {
-      router.push("/login"); // redirect to login page
-    },
-  },
-});
+  useEffect(() => {
+    authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/auth/sign-in");
+        },
+      },
+    });
+  }, [router]);
+
+  return <div>Signing out...</div>;
+}
