@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import AbyssiniaService from "../services/abyssinia.service";
 
 export class AbyssiniaController {
-  async verify(req: Request, res: Response) {
+  static async verify(req: Request, res: Response) {
     try {
       const { reference, accountSuffix } = req.body || {};
 

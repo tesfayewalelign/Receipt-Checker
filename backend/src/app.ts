@@ -7,6 +7,7 @@ import verificationRoutes from "./modules/verification/routes/index";
 import publicRoutes from "./modules/verification/routes/public.routes";
 import apiKeyRoutes from "./modules/verification/routes/apiKeys.routes";
 import auth from "./lib/auth";
+import router from "./modules/verification/receipt/routes/receipt.routes";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./docs/swagger";
 
@@ -23,7 +24,7 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+app.use("/api/receipts", router);
 app.get("/health", (req, res) => {
   res
     .status(200)

@@ -110,7 +110,7 @@ export class TelebirrVerifier {
     }
 
     try {
-      console.log(`[verifier] Calling proxy at: ${proxyUrl}/verify`);
+      console.log(`[verifier] Calling proxy at: ${proxyUrl}`);
 
       const response = await axios.post(
         `${proxyUrl}/verify`,

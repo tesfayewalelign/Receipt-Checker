@@ -47,7 +47,7 @@ export const verifyReceipt = async (req: Request, res: Response) => {
         result = await verifyCBEBirr({
           receiptNumber,
           phoneNumber,
-          apiKey: req.headers["x-api-key"] as string,
+
           fileBuffer,
           fileType,
         });
