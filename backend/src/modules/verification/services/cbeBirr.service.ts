@@ -5,14 +5,14 @@ import {
 
 export class CBEBirrService {
   static async verify(input: {
-    receiptNumber?: string;
+    reference?: string;
     phoneNumber: string;
 
     fileBuffer?: Buffer;
     fileType?: "pdf" | "image";
   }): Promise<CBEBirrVerifyResult> {
     return await verifyCBEBirr({
-      receiptNumber: input.receiptNumber,
+      reference: input.reference,
       phoneNumber: input.phoneNumber,
       fileBuffer: input.fileBuffer,
       fileType: input.fileType,

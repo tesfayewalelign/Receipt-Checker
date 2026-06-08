@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { ReceiptService } from "../services/receipt.service";
+import { normalize } from "../../../../utils/receiptNormalizer";
 
 export class ReceiptController {
   static async verify(req: Request, res: Response) {
@@ -7,6 +8,11 @@ export class ReceiptController {
 
     const result = await ReceiptService.verify(bank, req.body);
 
-    return res.json(result);
+    const normalized = normalize(bank, result);
+
+    return res.json({
+      success: true,
+      data: normalized,
+    });
   }
 }

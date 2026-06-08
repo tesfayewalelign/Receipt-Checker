@@ -45,7 +45,7 @@ export const verifyReceipt = async (req: Request, res: Response) => {
         break;
       case "cbebirr":
         result = await verifyCBEBirr({
-          receiptNumber,
+          reference,
           phoneNumber,
 
           fileBuffer,

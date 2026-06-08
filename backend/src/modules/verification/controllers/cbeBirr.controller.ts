@@ -8,7 +8,7 @@ export class CBEBirrController {
   static async verify(req: Request, res: Response) {
     const r = req as MulterRequest;
     const phoneNumber = r.body.phoneNumber || r.body.phone;
-    const receiptNumber = r.body.receiptNumber;
+    const reference = r.body.reference;
     const fileBuffer = r.file?.buffer;
     const fileType = r.file
       ? r.file.mimetype.includes("pdf")
@@ -22,7 +22,7 @@ export class CBEBirrController {
 
     try {
       const result = await CBEBirrService.verify({
-        receiptNumber,
+        reference,
         phoneNumber,
         fileBuffer,
         fileType,

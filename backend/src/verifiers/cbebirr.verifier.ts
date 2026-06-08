@@ -127,14 +127,14 @@ async function extractTextFromPDFBuffer(buffer: Buffer): Promise<string> {
 // ── Main verifier ─────────────────────────────────────────────────────────────
 
 export async function verifyCBEBirr(input: {
-  receiptNumber?: string | null;
+  reference?: string | null;
   phoneNumber: string;
 
   fileBuffer?: Buffer;
   fileType?: "pdf" | "image";
 }): Promise<CBEBirrVerifyResult> {
   try {
-    let { receiptNumber, phoneNumber, fileBuffer, fileType } = input;
+    let { reference, phoneNumber, fileBuffer, fileType } = input;
 
     // ── Validate phone number ───────────────────────────────────────────────
     if (!phoneNumber) {
@@ -150,20 +150,20 @@ export async function verifyCBEBirr(input: {
     }
 
     // ── Extract receipt number from file if not provided directly ───────────
-    if (!receiptNumber) {
+    if (!reference) {
       if (!fileBuffer) {
         return {
           success: false,
-          error: "Receipt number or receipt file is required",
+          error: "Reference or receipt file is required",
         };
       }
 
-      logger.info("[CBEBirr] Extracting receipt number from uploaded file");
+      logger.info("[CBEBirr] Extracting reference from uploaded file");
 
       if (fileType === "pdf") {
-        receiptNumber = await extractReceiptFromPDFBuffer(fileBuffer);
+        reference = await extractReceiptFromPDFBuffer(fileBuffer);
       } else if (fileType === "image") {
-        receiptNumber = await extractReceiptFromImageBuffer(fileBuffer);
+        reference = await extractReceiptFromImageBuffer(fileBuffer);
       } else {
         return {
           success: false,
@@ -171,20 +171,20 @@ export async function verifyCBEBirr(input: {
         };
       }
 
-      if (!receiptNumber) {
+      if (!reference) {
         return {
           success: false,
-          error: "Could not extract receipt number from file",
+          error: "Could not extract reference from file",
         };
       }
 
-      logger.info(`[CBEBirr] Extracted receipt number: ${receiptNumber}`);
+      logger.info(`[CBEBirr] Extracted reference: ${reference}`);
     }
 
     // ── Fetch PDF receipt from CBE ──────────────────────────────────────────
-    const url = `https://cbepay1.cbe.com.et/aureceipt?TID=${encodeURIComponent(receiptNumber)}&PH=${encodeURIComponent(cleanPhone)}`;
+    const url = `https://cbepay1.cbe.com.et/aureceipt?TID=${encodeURIComponent(reference)}&PH=${encodeURIComponent(cleanPhone)}`;
 
-    logger.info(`[CBEBirr] Fetching receipt for: ${receiptNumber}`);
+    logger.info(`[CBEBirr] Fetching receipt for: ${reference}`);
 
     const response = await axios.get<ArrayBuffer>(url, {
       responseType: "arraybuffer",
@@ -261,7 +261,7 @@ export async function verifyCBEBirr(input: {
       receiverName: extract(/Receiver\s*Name\s*(.*?)\s+Order/i),
       orderId: extract(/Order\s*ID\s*([A-Z0-9]+)/i),
       transactionStatus: extract(/Transaction\s*Status\s*(\w+)/i),
-      receiptNumber: extract(/(CL[A-Z0-9]+)/i) ?? receiptNumber,
+      receiptNumber: extract(/(CL[A-Z0-9]+)/i) ?? reference,
       transactionDate,
       amount,
       paidAmount,
@@ -292,7 +292,7 @@ export async function verifyCBEBirr(input: {
       });
     }
 
-    logger.info(`[CBEBirr] ✅ Verification SUCCESS for: ${receiptNumber}`);
+    logger.info(`[CBEBirr] ✅ Verification SUCCESS for: ${reference}`);
     return result;
   } catch (err: any) {
     logger.error("[CBEBirr] Verification failed:", err.message);

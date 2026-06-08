@@ -11,7 +11,7 @@ export class ReceiptService {
       case "telebirr":
         return TelebirrService.verify(payload);
 
-      case "cbebirr":
+      case "cbe-birr":
         return CBEBirrService.verify(payload);
 
       case "awash":

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { useEffect } from "react";
 import {
   Upload,
   FileText,
@@ -12,6 +13,7 @@ import {
   ArrowLeft,
   X,
 } from "lucide-react";
+import { verifyReceipt } from "@/services/receipt.service";
 
 const providers = {
   cbe: {
@@ -40,7 +42,7 @@ const providers = {
     referenceLabel: "Receipt Number",
     referencePlaceholder: "CBB123456789",
     referenceHint: "CBE Birr receipt number",
-    fields: ["reference", "phoneNumber", "image"],
+    fields: ["receiptNumber", "phoneNumber", "image"],
   },
 
   mpesa: {
@@ -97,6 +99,7 @@ export default function VerifyReceiptPage() {
     reference: "",
     accountSuffix: "",
     phoneNumber: "",
+    receiptNumber: "",
   });
 
   const [uploadedImage, setUploadedImage] = useState<File | null>(null);
@@ -129,27 +132,31 @@ export default function VerifyReceiptPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Form submitted");
     setIsVerifying(true);
     setVerificationResult(null);
 
-    setTimeout(() => {
-      const isValid = Math.random() > 0.3;
-
-      setVerificationResult({
-        verified: isValid,
-        transaction: {
-          id: formData.reference,
-          provider: provider?.name,
-          status: isValid ? "verified" : "failed",
-          accountSuffix: formData.accountSuffix,
-          phoneNumber: formData.phoneNumber,
-        },
-        fraudScore: Math.random() * 0.1,
-        processingTime: Math.floor(Math.random() * 200 + 100),
+    try {
+      const result = await verifyReceipt({
+        bank: providerId,
+        reference: formData.reference,
+        accountSuffix: formData.accountSuffix,
+        phoneNumber: formData.phoneNumber,
+        receiptNumber: formData.receiptNumber,
       });
 
+      console.log("API Result:", result);
+      setVerificationResult(result);
+    } catch (error) {
+      console.error(error);
+
+      setVerificationResult({
+        verified: false,
+        message: "Verification failed",
+      });
+    } finally {
       setIsVerifying(false);
-    }, 2000);
+    }
   };
 
   if (!provider) {
@@ -218,6 +225,7 @@ export default function VerifyReceiptPage() {
                   {provider.referenceHint}
                 </p>
               </div>
+              {/* RECEIPT NUMBER */}
 
               {/* PHONE */}
               {provider.fields.includes("phoneNumber") && (
@@ -289,7 +297,49 @@ export default function VerifyReceiptPage() {
               </button>
             </form>
           </div>
+          {/* RESULT SECTION */}
+          {verificationResult?.success && verificationResult?.data && (
+            <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+                <h3 className="font-bold text-green-700">
+                  Receipt Verified Successfully
+                </h3>
+              </div>
 
+              <div className="grid gap-3 text-sm text-gray-700">
+                <div>
+                  <span className="font-semibold">Payer:</span>{" "}
+                  {verificationResult.data.payer}
+                </div>
+
+                <div>
+                  <span className="font-semibold">Receiver:</span>{" "}
+                  {verificationResult.data.receiver}
+                </div>
+
+                <div>
+                  <span className="font-semibold">Amount:</span> ETB{" "}
+                  {verificationResult.data.amount}
+                </div>
+
+                <div>
+                  <span className="font-semibold">Reference:</span>{" "}
+                  {verificationResult.data.reference}
+                </div>
+
+                <div>
+                  <span className="font-semibold">Reason:</span>{" "}
+                  {verificationResult.data.reason}
+                </div>
+
+                <div>
+                  <span className="font-semibold">Date:</span>{" "}
+                  {new Date(verificationResult.data.date).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          )}
           {/* SIDEBAR */}
           {/* How it works */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
