@@ -27,25 +27,44 @@ export interface VerifyResult {
   error?: string;
 }
 
-const titleCase = (str: string) =>
+const titleCase = (str: string): string =>
   str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: process.env.NODE_ENV === "production",
+});
+
+function parseCBEDate(dateText: string): Date {
+  const commaIndex = dateText.indexOf(",");
+  if (commaIndex !== -1) {
+    const datePart = dateText.slice(0, commaIndex).trim();
+    const timePart = dateText.slice(commaIndex + 1).trim();
+    const parsed = new Date(`${datePart} ${timePart}`);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+
+  const fallback = new Date(dateText);
+  if (!isNaN(fallback.getTime())) return fallback;
+  throw new Error(`Unable to parse date: "${dateText}"`);
+}
 
 async function extractReferenceFromUploadedPdf(
   buffer: Buffer,
 ): Promise<string> {
   const uint8Array = new Uint8Array(buffer);
   const pdf = await pdfjs.getDocument({ data: uint8Array }).promise;
+
   let text = "";
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    text += content.items.map((i: any) => i.str).join(" ") + " ";
+    text += content.items.map((item: any) => item.str).join(" ") + " ";
   }
+
   const reference = text
     .replace(/\s+/g, " ")
     .match(/Reference\s+No\.?\s*\(VAT\s+Invoice\s+No\)\s+([A-Z0-9]+)/i)?.[1];
+
   if (!reference) throw new Error("Reference not found in uploaded PDF");
   return reference;
 }
@@ -63,24 +82,20 @@ export async function extractReferenceFromImage(
     .toBuffer();
 
   const worker = await createWorker("eng");
-
   const { data } = await worker.recognize(processedBuffer);
-
   await worker.terminate();
 
-  let text = data.text;
-
-  text = text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-
+  const text = data.text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
   console.log("OCR TEXT:", text);
 
   const matches = text.match(/\bFT[A-Z0-9]{8,}\b/g);
-
   if (!matches || matches.length === 0) {
     throw new Error("Reference not found in image");
   }
 
-  const reference = matches[matches.length - 1];
+  const reference = matches.reduce((best, current) =>
+    current.length >= best.length ? current : best,
+  );
 
   return reference;
 }
@@ -92,24 +107,56 @@ export async function verifyCBE(payload: {
   fileType?: "pdf" | "image";
 }): Promise<VerifyResult> {
   try {
-    if (!payload.accountSuffix)
+    if (!payload.accountSuffix) {
       return { success: false, error: "accountSuffix is required" };
+    }
+
     let reference = payload.reference;
+
     if (!reference && payload.fileBuffer) {
+      const fileType = payload.fileType ?? "pdf";
       reference =
-        payload.fileType === "pdf"
+        fileType === "pdf"
           ? await extractReferenceFromUploadedPdf(payload.fileBuffer)
           : await extractReferenceFromImage(payload.fileBuffer);
     }
-    if (!reference) return { success: false, error: "Reference not found" };
-    const officialPdf = await fetchCBEReceiptPdf(
+
+    if (!reference) {
+      return { success: false, error: "Reference not found" };
+    }
+
+    const officialPdf = await fetchCBEReceiptPdfWithRetry(
       reference,
       payload.accountSuffix,
     );
+
     return await parseCBEReceipt(officialPdf);
   } catch (err: any) {
     return { success: false, error: err.message };
   }
+}
+
+async function fetchCBEReceiptPdfWithRetry(
+  reference: string,
+  accountSuffix: string,
+  maxAttempts = 3,
+  delayMs = 2000,
+): Promise<Buffer> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fetchCBEReceiptPdf(reference, accountSuffix);
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`Attempt ${attempt}/${maxAttempts} failed: ${err.message}`);
+      if (attempt < maxAttempts) {
+        await new Promise((res) => setTimeout(res, delayMs));
+      }
+    }
+  }
+
+  throw lastError ?? new Error("All attempts to fetch CBE receipt failed");
 }
 
 async function fetchCBEReceiptPdf(
@@ -118,8 +165,10 @@ async function fetchCBEReceiptPdf(
 ): Promise<Buffer> {
   const fullId = `${reference.trim()}${accountSuffix.trim()}`;
   const url = `https://apps.cbe.com.et:100/?id=${fullId}`;
+
   let browser: Browser | null = null;
   let pdfUrl: string | null = null;
+
   try {
     browser = await puppeteer.launch({
       headless: true,
@@ -129,21 +178,61 @@ async function fetchCBEReceiptPdf(
         "--ignore-certificate-errors",
       ],
     });
+
     const page = await browser.newPage();
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     );
+
     page.on("response", (response: HTTPResponse) => {
-      const ct = response.headers()["content-type"];
-      if (ct && ct.includes("application/pdf")) pdfUrl = response.url();
+      const responseUrl = response.url();
+      const ct = response.headers()["content-type"] || "";
+      if (
+        ct.includes("application/pdf") ||
+        responseUrl.toLowerCase().endsWith(".pdf")
+      ) {
+        pdfUrl = responseUrl;
+      }
     });
+
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-    if (!pdfUrl) throw new Error("Receipt PDF not found on page.");
+
+    if (!pdfUrl) {
+      pdfUrl = await page.evaluate((): string | null => {
+        const selectors = [
+          'embed[src*=".pdf"]',
+          'iframe[src*=".pdf"]',
+          'object[data*=".pdf"]',
+          'a[href*=".pdf"]',
+        ];
+        for (const sel of selectors) {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          if (el) {
+            return (
+              (el as HTMLEmbedElement).src ||
+              (el as HTMLObjectElement).data ||
+              (el as HTMLAnchorElement).href ||
+              null
+            );
+          }
+        }
+        return null;
+      });
+    }
+
+    if (!pdfUrl) {
+      throw new Error(
+        `Receipt PDF not found on page for reference "${reference}". ` +
+          `The CBE portal may have returned an error or the reference is invalid.`,
+      );
+    }
+
     const download = await axios.get(pdfUrl, {
       responseType: "arraybuffer",
       httpsAgent,
       timeout: 30000,
     });
+
     return Buffer.from(download.data);
   } finally {
     if (browser) await browser.close();
@@ -155,11 +244,12 @@ export async function parseCBEReceipt(
 ): Promise<VerifyResult> {
   try {
     const pdfDocument = await pdfjs.getDocument({
-      data: new Uint8Array(buffer),
+      data: new Uint8Array(buffer instanceof Buffer ? buffer : buffer),
       standardFontDataUrl: "https://unpkg.com",
       useSystemFonts: true,
       disableFontFace: true,
     }).promise;
+
     let fullText = "";
     for (let i = 1; i <= pdfDocument.numPages; i++) {
       const page = await pdfDocument.getPage(i);
@@ -167,7 +257,9 @@ export async function parseCBEReceipt(
       fullText +=
         textContent.items.map((item: any) => item.str).join(" ") + "\n";
     }
+
     const rawText = fullText.replace(/\s+/g, " ").trim();
+
     const payerMatch = rawText.match(/Payer\s+(.*?)\s+Account\s+([\w*]+)/i);
     const receiverMatch = rawText.match(
       /Receiver\s+(.*?)\s+Account\s+([\w*]+)/i,
@@ -184,6 +276,7 @@ export async function parseCBEReceipt(
     const reasonMatch = rawText.match(
       /Reason\s*\/\s*Type\s+of\s+service\s+(.*?)\s+Transferred/i,
     );
+
     const payerName = payerMatch?.[1]?.trim();
     const payerAccount = payerMatch?.[2]?.trim();
     const receiverName = receiverMatch?.[1]?.trim();
@@ -191,6 +284,7 @@ export async function parseCBEReceipt(
     const reference = refMatch?.[1]?.trim();
     const amountText = amountMatch?.[1]?.trim();
     const dateText = dateMatch?.[1]?.trim();
+
     if (payerName && receiverName && reference && amountText && dateText) {
       return {
         success: true,
@@ -200,23 +294,24 @@ export async function parseCBEReceipt(
           receiver: titleCase(receiverName),
           receiverAccount: receiverAccount || "N/A",
           amount: parseFloat(amountText.replace(/,/g, "")),
-          date: new Date(dateText.replace(",", "")),
+          date: parseCBEDate(dateText), // FIX (Bug 4)
           reference,
           reason: reasonMatch?.[1]?.trim() || null,
         },
       };
-    } else {
-      const missing = [];
-      if (!payerName) missing.push("Payer");
-      if (!receiverName) missing.push("Receiver");
-      if (!reference) missing.push("Reference");
-      if (!amountText) missing.push("Amount");
-      if (!dateText) missing.push("Date");
-      return {
-        success: false,
-        error: `Could not extract: ${missing.join(", ")}`,
-      };
     }
+
+    const missing: string[] = [];
+    if (!payerName) missing.push("Payer");
+    if (!receiverName) missing.push("Receiver");
+    if (!reference) missing.push("Reference");
+    if (!amountText) missing.push("Amount");
+    if (!dateText) missing.push("Date");
+
+    return {
+      success: false,
+      error: `Could not extract: ${missing.join(", ")}`,
+    };
   } catch (err: any) {
     return { success: false, error: "Failed to parse PDF: " + err.message };
   }

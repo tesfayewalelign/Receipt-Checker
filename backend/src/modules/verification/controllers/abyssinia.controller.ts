@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import AbyssiniaService from "../services/abyssinia.service";
+import { AbyssiniaService } from "../services/abyssinia.service";
 
 export class AbyssiniaController {
   static async verify(req: Request, res: Response) {

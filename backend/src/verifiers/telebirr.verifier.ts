@@ -66,6 +66,51 @@ function normalizeReference(reference: string): string {
     .replace(/[^A-Z0-9]/g, "");
 }
 
+// ── Proxy URL helpers ─────────────────────────────────────────────────────
+
+/**
+ * Reads all configured proxy URLs from environment variables.
+ *
+ * Supported env vars (checked in order):
+ *   TELEBIRR_PROXY_URL          → always included if set
+ *   TELEBIRR_PROXY_URL_1        → alias / first numbered proxy
+ *   TELEBIRR_PROXY_URL_2        → second proxy
+ *   TELEBIRR_PROXY_URL_3 ...    → up to 9 numbered proxies
+ *
+ * Duplicates are removed and empty strings are filtered out.
+ */
+function getProxyUrls(): string[] {
+  const keys = [
+    "TELEBIRR_PROXY_URL",
+    ...Array.from({ length: 9 }, (_, i) => `TELEBIRR_PROXY_URL_${i + 1}`),
+  ];
+
+  const seen = new Set<string>();
+  const urls: string[] = [];
+
+  for (const key of keys) {
+    const val = process.env[key]?.trim();
+    if (val && !seen.has(val)) {
+      seen.add(val);
+      urls.push(val);
+    }
+  }
+
+  return urls;
+}
+
+// ── Telebirr direct URL builder ───────────────────────────────────────────
+
+const TELEBIRR_RECEIPT_URL =
+  process.env.TELEBIRR_RECEIPT_URL ??
+  "https://transactioninfo.ethiotelecom.et/receipt";
+
+function buildDirectUrl(reference: string): string {
+  return `${TELEBIRR_RECEIPT_URL}/${encodeURIComponent(reference)}`;
+}
+
+// ── Verifier ──────────────────────────────────────────────────────────────
+
 export class TelebirrVerifier {
   async verify(reference: string): Promise<TelebirrReceipt | null> {
     if (!reference) return null;
@@ -73,53 +118,133 @@ export class TelebirrVerifier {
     const cleanedRef = normalizeReference(reference);
     console.log(`[verifier] Verifying reference: ${cleanedRef}`);
 
-    // Get HTML from proxy (proxy is on ET network, so it can access the site)
-    const html = await this.fetchFromProxy(cleanedRef);
-
-    if (!html) {
-      console.error("[verifier] Could not get HTML from proxy");
-      return null;
+    // 1️⃣  Try direct (no proxy) first
+    const directHtml = await this.fetchDirect(cleanedRef);
+    if (directHtml) {
+      const receipt = this.parseReceipt(directHtml, cleanedRef);
+      if (receipt && this.validateReceipt(receipt)) {
+        console.log(
+          `[verifier] ✅ Verification SUCCESS (direct) for: ${cleanedRef}`,
+        );
+        return receipt;
+      }
+      console.warn(
+        "[verifier] Direct fetch returned HTML but parse/validation failed — trying proxies",
+      );
+    } else {
+      console.warn("[verifier] Direct fetch failed — trying proxies");
     }
 
-    const receipt = this.parseReceipt(html, cleanedRef);
+    // 2️⃣  Try each configured proxy in order
+    const proxyUrls = getProxyUrls();
 
-    if (!receipt) {
-      console.error("[verifier] Failed to parse receipt from HTML");
-      return null;
-    }
-
-    if (!this.validateReceipt(receipt)) {
-      console.error("[verifier] Receipt validation failed:", receipt);
-      return null;
-    }
-
-    console.log(`[verifier] ✅ Verification SUCCESS for: ${cleanedRef}`);
-    return receipt;
-  }
-
-  private async fetchFromProxy(reference: string): Promise<string | null> {
-    const proxyUrl = process.env.TELEBIRR_PROXY_URL;
-
-    if (!proxyUrl) {
+    if (proxyUrls.length === 0) {
       console.error(
-        "[verifier] TELEBIRR_PROXY_URL is not set in your .env file!\n" +
-          "           Add: TELEBIRR_PROXY_URL=http://localhost:4000\n" +
-          "           Or the public URL from localhost.run / ngrok",
+        "[verifier] No proxy URLs configured.\n" +
+          "           Set TELEBIRR_PROXY_URL (or TELEBIRR_PROXY_URL_1, _2 …) in your .env file.",
       );
       return null;
     }
 
-    try {
-      console.log(`[verifier] Calling proxy at: ${proxyUrl}`);
+    for (let i = 0; i < proxyUrls.length; i++) {
+      const proxyUrl = proxyUrls[i];
+      const label = `proxy #${i + 1} (${proxyUrl})`;
+      console.log(`[verifier] Trying ${label} …`);
 
+      const html = await this.fetchFromProxy(cleanedRef, proxyUrl);
+      if (!html) {
+        console.warn(`[verifier] ${label} returned no HTML — trying next`);
+        continue;
+      }
+
+      const receipt = this.parseReceipt(html, cleanedRef);
+      if (!receipt) {
+        console.warn(
+          `[verifier] ${label}: HTML received but parse failed — trying next`,
+        );
+        continue;
+      }
+
+      if (!this.validateReceipt(receipt)) {
+        console.warn(
+          `[verifier] ${label}: parsed but validation failed — trying next`,
+          receipt,
+        );
+        continue;
+      }
+
+      console.log(
+        `[verifier] ✅ Verification SUCCESS via ${label} for: ${cleanedRef}`,
+      );
+      return receipt;
+    }
+
+    console.error(
+      `[verifier] ❌ All ${proxyUrls.length} proxy(ies) exhausted — verification failed`,
+    );
+    return null;
+  }
+
+  // ── Direct fetch (no proxy) ─────────────────────────────────────────────
+
+  private async fetchDirect(reference: string): Promise<string | null> {
+    const url = buildDirectUrl(reference);
+    console.log(`[verifier] Attempting direct fetch: ${url}`);
+
+    try {
+      const response = await axios.get(url, {
+        timeout: 15_000,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; TelebirrVerifier/1.0)",
+          Accept: "text/html,application/xhtml+xml",
+        },
+        // Don't throw on non-2xx so we can inspect the body
+        validateStatus: (s) => s < 500,
+      });
+
+      if (response.status >= 400) {
+        console.warn(
+          `[verifier] Direct fetch HTTP ${response.status} — treating as failure`,
+        );
+        return null;
+      }
+
+      const html =
+        typeof response.data === "string"
+          ? response.data
+          : JSON.stringify(response.data);
+
+      if (!html || html.trim().length < 50) {
+        console.warn("[verifier] Direct fetch returned empty / tiny body");
+        return null;
+      }
+
+      return html;
+    } catch (err: any) {
+      if (axios.isAxiosError(err)) {
+        console.warn(
+          `[verifier] Direct fetch axios error [${err.code ?? err.response?.status ?? "?"}]: ${err.message}`,
+        );
+      } else {
+        console.warn(
+          `[verifier] Direct fetch unexpected error: ${err.message}`,
+        );
+      }
+      return null;
+    }
+  }
+
+  private async fetchFromProxy(
+    reference: string,
+    proxyUrl: string,
+  ): Promise<string | null> {
+    try {
       const response = await axios.post(
         `${proxyUrl}/verify`,
         { reference },
         {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 45000, // 45 seconds — proxy may need time to use Puppeteer
+          headers: { "Content-Type": "application/json" },
+          timeout: 45_000, // proxies may use Puppeteer — give them time
         },
       );
 
@@ -129,11 +254,11 @@ export class TelebirrVerifier {
       }
 
       if (!response.data?.html) {
-        console.error("[verifier] Proxy returned no HTML");
+        console.error("[verifier] Proxy returned no HTML field");
         return null;
       }
 
-      return response.data.html;
+      return response.data.html as string;
     } catch (err: any) {
       if (axios.isAxiosError(err)) {
         console.error(
@@ -209,7 +334,6 @@ export class TelebirrVerifier {
         if (m) status = m[0];
       }
 
-      // All three are required
       if (!amount || isNaN(amount) || !date || !status) {
         console.error("[verifier] parseReceipt: missing fields", {
           amount,

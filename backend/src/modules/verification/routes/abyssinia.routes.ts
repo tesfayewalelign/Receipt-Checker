@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import AbyssiniaController from "../controllers/abyssinia.controller";
+import { AbyssiniaController } from "../controllers/abyssinia.controller";
 
 const router = Router();
 

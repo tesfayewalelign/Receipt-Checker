@@ -1,5 +1,3 @@
-// receipt.route.ts
-
 import { Router } from "express";
 import { ReceiptController } from "../controllers/receipt.controller";
 

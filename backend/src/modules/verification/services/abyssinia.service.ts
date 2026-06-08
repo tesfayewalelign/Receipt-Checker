@@ -1,6 +1,6 @@
 import { verifyAbyssinia } from "../../../verifiers/abyssinia.verifier";
 export class AbyssiniaService {
-  async verify(input: {
+  static async verify(input: {
     reference?: string;
     accountSuffix?: string;
     fileBuffer?: Buffer;
@@ -8,5 +8,3 @@ export class AbyssiniaService {
     return await verifyAbyssinia(input);
   }
 }
-
-export default new AbyssiniaService();
