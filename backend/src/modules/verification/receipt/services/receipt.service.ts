@@ -5,28 +5,56 @@ import { CBEVerificationService } from "../../services/cbe.service";
 import { DashenService } from "../../services/dashn.service";
 import { AbyssiniaService } from "../../services/abyssinia.service";
 import { MPesaService } from "../../services/mpessa.service";
+import { normalizeReceipt } from "../../../../utils/receiptNormalizer";
+
 export class ReceiptService {
   static async verify(bank: string, payload: any) {
+    let rawResult;
+
     switch (bank) {
       case "telebirr":
-        return TelebirrService.verify(payload);
+        rawResult = await TelebirrService.verify(payload);
+
+        break;
 
       case "cbe-birr":
-        return CBEBirrService.verify(payload);
+        rawResult = await CBEBirrService.verify(payload);
+
+        break;
 
       case "awash":
-        return AwashService.verify(payload);
+        rawResult = await AwashService.verify(payload);
+
+        break;
+
       case "cbe":
-        return CBEVerificationService.verify(payload);
+        rawResult = await CBEVerificationService.verify(payload);
+        break;
+
       case "dashen":
-        return DashenService.verify(payload);
+        rawResult = await DashenService.verify(payload);
+        break;
+
       case "abyssinia":
-        return AbyssiniaService.verify(payload);
+        rawResult = await AbyssiniaService.verify(payload);
+
+        break;
+
       case "mpesa":
-        return MPesaService.verify(payload);
+        rawResult = await MPesaService.verify(payload);
+        console.log("cbe birr RAW RESULT:");
+        console.log(JSON.stringify(rawResult, null, 2));
+        break;
 
       default:
         throw new Error("Unsupported provider");
     }
+
+    const normalized = normalizeReceipt(bank, rawResult);
+
+    return {
+      success: rawResult.success,
+      data: normalized,
+    };
   }
 }

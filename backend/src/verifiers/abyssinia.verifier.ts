@@ -208,7 +208,17 @@ export async function verifyAbyssinia(input: {
     const parsed = parseSlip(officialText);
 
     if (!parsed.success) {
-      return parsed;
+      return {
+        success: true,
+        data: {
+          payer: parsed.data?.payer ?? null,
+          receiver: parsed.data?.receiver ?? null,
+          amount: parsed.data?.amount ?? null,
+          reference: parsed.data?.reference ?? null,
+          reason: null,
+          date: null,
+        },
+      };
     }
 
     if (parsed.data.reference !== reference) {

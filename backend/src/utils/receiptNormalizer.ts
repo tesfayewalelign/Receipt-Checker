@@ -1,14 +1,97 @@
-export function normalize(bank: string, raw: any) {
-  const data = raw?.data || raw?.result || raw || {};
+export function normalizeReceipt(bank: string, result: any) {
+  switch (bank.toLowerCase()) {
+    case "cbe":
+      return {
+        payer: result.data?.payer,
+        payerAccount: result.data?.payerAccount,
+        receiver: result.data?.receiver,
+        receiverAccount: result.data?.receiverAccount,
+        amount: result.data?.amount,
+        reference: result.data?.reference,
+        reason: result.data?.reason,
+        date: result.data?.date,
+      };
 
-  const clean = {
-    payer: data?.payer || data?.senderName || "Unknown",
-    receiver: data?.receiver || data?.receiverName || "Unknown",
-    amount: Number(data?.amount || data?.totalAmount || 0),
-    reference: data?.reference || data?.transactionId || "N/A",
-    reason: data?.reason || data?.note || "N/A",
-    date: data?.date || new Date().toISOString(),
-  };
+    case "cbe-birr":
+      return {
+        payer: result.customerName,
+        payerAccount: result.debitAccount,
+        receiver: result.receiverName,
+        receiverAccount: result.creditAccount,
+        amount: result.amount,
+        reference: result.receiptNumber,
+        reason: result.paymentReason,
+        date: result.transactionDate,
+      };
 
-  return clean; // 🔥 ONLY DATA
+    case "telebirr":
+      return {
+        payer: result.data?.payer,
+        payerAccount: result.data?.payerAccount,
+        receiver: result.data?.receiver,
+        receiverAccount: result.data?.receiverAccount,
+        amount: result.data?.amount,
+        reference: result.data?.reference,
+        reason: result.data?.reason,
+        date: result.data?.date,
+      };
+
+    case "mpesa":
+      return {
+        payer: result.data?.payer,
+        payerAccount: result.data?.payerAccount,
+        receiver: result.data?.receiver,
+        receiverAccount: result.data?.receiverAccount,
+        amount: result.data?.amount,
+        reference: result.data?.reference,
+        reason: result.data?.reason,
+        date: result.data?.date,
+      };
+
+    case "dashen":
+      return {
+        payer: result.senderName,
+        payerAccount: result.senderAccountNumber,
+        receiver: result.receiverName,
+        receiverAccount: result.phoneNo,
+        amount: result.transactionAmount,
+        reference: result.transactionReference,
+        reason: result.narrative,
+        date: result.transactionDate,
+      };
+
+    case "awash":
+      return {
+        payer: result.data?.["Customer Name"] ?? null,
+
+        payerAccount: result.data?.["Account No"] ?? null,
+
+        receiver: result.data?.["Recipient"] ?? null,
+
+        receiverAccount: result.data?.["Recipient"] ?? null,
+
+        amount: result.data?.["Amount"] ? Number(result.data["Amount"]) : null,
+
+        reference: result.data?.["Txn Ref"] ?? result.reference ?? null,
+
+        reason: result.data?.["Trans type"] ?? null,
+
+        date: result.data?.["Date"] ?? null,
+      };
+
+    case "abyssinia":
+      return {
+        payer: result.data?.payer,
+        payerAccount: result.data?.payerAccount,
+        receiver: result.data?.receiver,
+        receiverAccount: result.data?.receiverAccount,
+        amount: result.data?.amount,
+        reference: result.data?.reference,
+        reason: result.data?.reason,
+        date: result.data?.date,
+      };
+
+    default:
+      return null;
+  }
 }
