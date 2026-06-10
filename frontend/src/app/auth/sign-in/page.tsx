@@ -5,13 +5,14 @@ import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, Globe, GitBranch } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-
+  const [showPassword, setShowPassword] = useState(false);
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -148,13 +149,25 @@ export default function SignInPage() {
 
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full h-12 sm:h-13 rounded-xl border border-gray-300 bg-white pl-12 pr-4 text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  className="w-full h-12 sm:h-13 rounded-xl border border-gray-300 bg-white pl-12 pr-12 text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                 />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
               </div>
             </div>
 

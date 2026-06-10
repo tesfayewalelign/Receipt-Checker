@@ -5,10 +5,12 @@ import Link from "next/link";
 import { Mail, Lock, Building2, Globe, GitBranch } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
-
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -198,13 +200,24 @@ export default function SignUpPage() {
 
               <input
                 name="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Create a strong password"
                 value={formData.password}
                 onChange={handleChange}
                 required
                 className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-900 placeholder:text-gray-400 bg-white outline-none transition-all duration-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
             </div>
 
             {/* Confirm Password */}
@@ -213,13 +226,24 @@ export default function SignUpPage() {
 
               <input
                 name="confirmPassword"
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 placeholder="Confirm password"
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 required
                 className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-900 placeholder:text-gray-400 bg-white outline-none transition-all duration-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
               />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
             </div>
 
             {/* Terms */}
