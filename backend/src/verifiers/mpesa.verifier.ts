@@ -2,45 +2,42 @@ import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 import fs from "fs";
 import path from "path";
 import Tesseract from "tesseract.js";
-import https from "https";
-import axios from "axios";
+import puppeteer from "puppeteer";
 import { VerifyResult } from "./cbe.verifier";
 
-function normalizeText(text: string): string[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
+// ─────────────────────────────────────────────
+// EXTRACT REF
+// ─────────────────────────────────────────────
 
 function extractReference(text: string): string | null {
   const match = text.match(/UBH[A-Z0-9]{6,}/i);
   return match ? match[0].toUpperCase() : null;
 }
 
+// ─────────────────────────────────────────────
+// PDF READER
+// ─────────────────────────────────────────────
+
 async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
-  const uint8Array = new Uint8Array(buffer);
   const pdf = await pdfjs.getDocument({
-    data: uint8Array,
-    standardFontDataUrl:
-      "https://unpkg.com/pdfjs-dist@2.16.105/legacy/web/cmaps/",
+    data: new Uint8Array(buffer),
     useSystemFonts: true,
     disableFontFace: true,
   }).promise;
 
-  let fullText = "";
+  let text = "";
+
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    fullText += content.items.map((i: any) => i.str).join(" ") + "\n";
+    text += content.items.map((i: any) => i.str).join(" ") + "\n";
   }
 
-  return fullText;
+  return text;
 }
 
 async function extractTextFromPdf(filePath: string): Promise<string> {
-  const buffer = fs.readFileSync(filePath);
-  return extractTextFromPdfBuffer(buffer);
+  return extractTextFromPdfBuffer(fs.readFileSync(filePath));
 }
 
 async function extractTextFromImage(filePath: string): Promise<string> {
@@ -48,48 +45,16 @@ async function extractTextFromImage(filePath: string): Promise<string> {
   return result.data.text;
 }
 
-async function fetchMpesaPdf(reference: string): Promise<Buffer> {
-  const url = `https://m-pesabusiness.safaricom.et/receipt/${reference}`;
-
-  let pdfUrl: string | null = null;
-  const httpsAgent = new https.Agent({ rejectUnauthorized: false });
-
-  const puppeteer = await import("puppeteer");
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox"],
-  });
-  const page = await browser.newPage();
-  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-
-  page.on("response", (response) => {
-    const ct = response.headers()["content-type"];
-    if (ct && ct.includes("application/pdf")) pdfUrl = response.url();
-  });
-
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-
-  const start = Date.now();
-  while (!pdfUrl && Date.now() - start < 15000) {
-    await new Promise((r) => setTimeout(r, 500));
-  }
-
-  await browser.close();
-
-  if (!pdfUrl) throw new Error("PDF not generated from M-PESA page");
-
-  const response = await axios.get(pdfUrl, {
-    responseType: "arraybuffer",
-    httpsAgent,
-  });
-  return Buffer.from(response.data);
-}
+// ─────────────────────────────────────────────
+// PARSER (UNCHANGED LOGIC)
+// ─────────────────────────────────────────────
 
 function parseMpesaPdfText(text: string): VerifyResult {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
+  const fullText = lines.join(" ");
 
   let payer: string | null = null;
   let payerAccount: string | null = null;
@@ -102,8 +67,6 @@ function parseMpesaPdfText(text: string): VerifyResult {
   let date: Date | null = null;
   let reference: string | null = null;
   let reason: string | null = null;
-
-  const fullText = lines.join(" ");
 
   reference = fullText.match(/UBH[A-Z0-9]{7,}/i)?.[0] || null;
 
@@ -127,11 +90,12 @@ function parseMpesaPdfText(text: string): VerifyResult {
       payerAccount = genericNameMatch[2].trim();
     } else {
       const phoneMatch = fullText.match(/(251\d{9})/);
+
       if (phoneMatch) {
         payerAccount = phoneMatch[1];
 
         const wordsBefore = fullText
-          .substring(0, phoneMatch.index)
+          .substring(0, phoneMatch.index ?? 0)
           .split(/\s+/)
           .filter(Boolean);
 
@@ -144,17 +108,16 @@ function parseMpesaPdfText(text: string): VerifyResult {
           )
           .trim();
 
-        if (/^[A-Za-z]+\s+[A-Za-z]+/.test(cleaned)) {
-          payer = cleaned;
-        } else {
-          payer = "M-PESA User";
-        }
+        payer = /^[A-Za-z]+\s+[A-Za-z]+/.test(cleaned)
+          ? cleaned
+          : "M-PESA User";
       }
     }
   }
 
   const bankMatch = fullText.match(/Commercial Bank of Ethiopia/i);
   const accMatch = fullText.match(/(\d{13})/);
+
   if (bankMatch) receiver = bankMatch[0];
   if (accMatch) receiverAccount = accMatch[0];
 
@@ -167,16 +130,15 @@ function parseMpesaPdfText(text: string): VerifyResult {
   const serviceFeeMatch = fullText.match(
     /SERVICE FEE\s+([0-9]+(?:\.[0-9]{1,2})?)/i,
   );
-
   if (serviceFeeMatch) serviceCharge = parseFloat(serviceFeeMatch[1]);
 
   const vatMatch = fullText.match(/VAT\s+([0-9]+(?:\.[0-9]{1,2})?)/i);
-
   if (vatMatch) vat = parseFloat(vatMatch[1]);
 
   const totalMatch = fullText.match(
     /TOTAL\s*(?:AMOUNT)?\s*([0-9]+\.[0-9]{2})/i,
   );
+
   if (totalMatch) {
     totalAmount = parseFloat(totalMatch[1]);
   } else {
@@ -204,6 +166,11 @@ function parseMpesaPdfText(text: string): VerifyResult {
     },
   };
 }
+
+// ─────────────────────────────────────────────
+// MAIN VERIFIER
+// ─────────────────────────────────────────────
+
 export async function verifyMPesa(input: {
   reference?: string;
   fileBuffer?: Buffer;
@@ -212,25 +179,28 @@ export async function verifyMPesa(input: {
   try {
     let reference = input.reference;
 
-    if (input.fileBuffer || input.filePath) {
+    // extract reference from file if needed
+    if (!reference && (input.fileBuffer || input.filePath)) {
       let text = "";
+
       if (input.fileBuffer) {
         text = await extractTextFromPdfBuffer(input.fileBuffer);
       } else if (input.filePath) {
         const ext = path.extname(input.filePath).toLowerCase();
-        if (ext === ".pdf") text = await extractTextFromPdf(input.filePath);
-        else text = await extractTextFromImage(input.filePath);
+        text =
+          ext === ".pdf"
+            ? await extractTextFromPdf(input.filePath)
+            : await extractTextFromImage(input.filePath);
       }
 
-      const refFromFile = extractReference(text);
-      if (!refFromFile && !reference) {
+      reference = extractReference(text) || undefined;
+
+      if (!reference) {
         return {
           success: false,
           error: "Transaction reference not found in file",
         };
       }
-
-      reference = refFromFile || reference;
     }
 
     if (!reference) {
@@ -240,22 +210,78 @@ export async function verifyMPesa(input: {
       };
     }
 
-    const pdfBuffer = await fetchMpesaPdf(reference);
-
-    const uint8Array = new Uint8Array(pdfBuffer);
-    const pdfDoc = await pdfjs.getDocument({ data: uint8Array }).promise;
-    let fullText = "";
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      const page = await pdfDoc.getPage(i);
-      const content = await page.getTextContent();
-      fullText += content.items.map((i: any) => i.str).join(" ") + "\n";
-    }
-
-    return parseMpesaPdfText(fullText);
+    return await fetchMpesaReceipt(reference);
   } catch (err: any) {
     return {
       success: false,
       error: err.message || "MPESA verification failed",
     };
+  }
+}
+
+// ─────────────────────────────────────────────
+// FETCH RECEIPT (FIXED + STABLE)
+// ─────────────────────────────────────────────
+
+async function fetchMpesaReceipt(reference: string): Promise<VerifyResult> {
+  const url = `https://m-pesabusiness.safaricom.et/receipt/${reference}`;
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
+  let pdfBuffer: Buffer | null = null;
+
+  try {
+    const page = await browser.newPage();
+
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    );
+
+    // capture PDF response
+    page.on("response", async (res) => {
+      try {
+        const ct = res.headers()["content-type"] || "";
+
+        if (ct.includes("application/pdf")) {
+          pdfBuffer = Buffer.from(await res.buffer());
+        }
+      } catch {}
+    });
+
+    // open page
+    await page.goto(url, {
+      waitUntil: "networkidle2",
+      timeout: 60000,
+    });
+
+    // IMPORTANT: trigger download button click
+
+    await page.evaluate(() => {
+      const el = Array.from(document.querySelectorAll("button, a")).find((e) =>
+        e.textContent?.toLowerCase().includes("download"),
+      );
+
+      if (el) (el as HTMLElement).click();
+    });
+
+    // wait for pdf
+    let wait = 0;
+    while (!pdfBuffer && wait < 15000) {
+      await new Promise((r) => setTimeout(r, 500));
+      wait += 500;
+    }
+
+    if (!pdfBuffer) {
+      throw new Error("MPESA PDF not captured after click");
+    }
+
+    const text = await extractTextFromPdfBuffer(pdfBuffer);
+
+    return parseMpesaPdfText(text);
+  } finally {
+    await browser.close();
   }
 }

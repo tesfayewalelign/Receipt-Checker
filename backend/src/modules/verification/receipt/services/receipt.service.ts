@@ -35,15 +35,16 @@ export class ReceiptService {
         rawResult = await DashenService.verify(payload);
         break;
 
-      case "abyssinia":
+      case "boa":
         rawResult = await AbyssiniaService.verify(payload);
-
+        console.log("========== MPESA RAW RESULT ==========");
+        console.log(JSON.stringify(rawResult, null, 2));
+        console.log("======================================");
         break;
 
       case "mpesa":
         rawResult = await MPesaService.verify(payload);
-        console.log("cbe birr RAW RESULT:");
-        console.log(JSON.stringify(rawResult, null, 2));
+
         break;
 
       default:
@@ -51,6 +52,9 @@ export class ReceiptService {
     }
 
     const normalized = normalizeReceipt(bank, rawResult);
+    console.log("========== NORMALIZED RESULT ==========");
+    console.log(JSON.stringify(normalized, null, 2));
+    console.log("=======================================");
 
     return {
       success: rawResult.success,

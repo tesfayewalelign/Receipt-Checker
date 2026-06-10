@@ -79,7 +79,7 @@ export function normalizeReceipt(bank: string, result: any) {
         date: result.data?.["Date"] ?? null,
       };
 
-    case "abyssinia":
+    case "boa":
       return {
         payer: result.data?.payer,
         payerAccount: result.data?.payerAccount,

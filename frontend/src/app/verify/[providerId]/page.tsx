@@ -11,9 +11,30 @@ import {
   CheckCircle,
   Loader,
   ArrowLeft,
+  Copy,
   X,
 } from "lucide-react";
 import { verifyReceipt } from "@/services/receipt.service";
+
+function DetailItem({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | number | null;
+}) {
+  return (
+    <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+      <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+        {label}
+      </p>
+
+      <p className="font-semibold text-gray-900 break-words">
+        {value || "N/A"}
+      </p>
+    </div>
+  );
+}
 
 const providers = {
   cbe: {
@@ -298,45 +319,136 @@ export default function VerifyReceiptPage() {
             </form>
           </div>
           {/* RESULT SECTION */}
+          {/* RESULT SECTION */}
           {verificationResult?.success && verificationResult?.data && (
-            <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-                <h3 className="font-bold text-green-700">
-                  Receipt Verified Successfully
-                </h3>
+            <div className="lg:col-span-3">
+              <div className="mt-8 overflow-hidden rounded-3xl bg-white shadow-xl border border-green-200">
+                {/* HEADER */}
+                <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 text-white">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="w-10 h-10" />
+
+                      <div>
+                        <h2 className="text-2xl font-bold">
+                          Receipt Verified Successfully
+                        </h2>
+
+                        <p className="text-green-100">
+                          Transaction has been validated.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/20 px-4 py-2 rounded-full">
+                      <span className="font-semibold">✓ VERIFIED</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* BODY */}
+                <div className="p-6">
+                  {/* Amount Card */}
+                  <div className="mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 p-6 text-center">
+                    <p className="text-sm text-emerald-700 mb-2">
+                      Transaction Amount
+                    </p>
+
+                    <h2 className="text-4xl font-bold text-emerald-700">
+                      ETB {verificationResult.data.amount ?? "0"}
+                    </h2>
+                  </div>
+
+                  {/* DETAILS */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <DetailItem
+                      label="Payer"
+                      value={verificationResult.data.payer}
+                    />
+
+                    <DetailItem
+                      label="Payer Account"
+                      value={verificationResult.data.payerAccount}
+                    />
+
+                    <DetailItem
+                      label="Receiver"
+                      value={verificationResult.data.receiver}
+                    />
+
+                    <DetailItem
+                      label="Receiver Account"
+                      value={verificationResult.data.receiverAccount}
+                    />
+
+                    <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+                        Reference
+                      </p>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-gray-900 break-all">
+                          {verificationResult.data.reference || "N/A"}
+                        </p>
+
+                        {verificationResult.data.reference && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigator.clipboard.writeText(
+                                verificationResult.data.reference,
+                              )
+                            }
+                            className="p-2 rounded-lg hover:bg-gray-200"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <DetailItem
+                      label="Reason"
+                      value={verificationResult.data.reason}
+                    />
+
+                    <DetailItem
+                      label="Transaction Date"
+                      value={
+                        verificationResult.data.date
+                          ? new Date(
+                              verificationResult.data.date,
+                            ).toLocaleString()
+                          : "N/A"
+                      }
+                    />
+
+                    <DetailItem
+                      label="Verification Time"
+                      value={new Date().toLocaleString()}
+                    />
+                  </div>
+                </div>
               </div>
+            </div>
+          )}
+          {verificationResult && !verificationResult.success && (
+            <div className="lg:col-span-3">
+              <div className="mt-8 rounded-3xl border border-red-200 bg-red-50 p-6">
+                <h3 className="text-xl font-bold text-red-700 mb-2">
+                  Receipt Verification Failed
+                </h3>
 
-              <div className="grid gap-3 text-sm text-gray-700">
-                <div>
-                  <span className="font-semibold">Payer:</span>{" "}
-                  {verificationResult.data.payer}
-                </div>
+                <p className="text-red-600">
+                  We couldn't verify this transaction.
+                </p>
 
-                <div>
-                  <span className="font-semibold">Receiver:</span>{" "}
-                  {verificationResult.data.receiver}
-                </div>
-
-                <div>
-                  <span className="font-semibold">Amount:</span> ETB{" "}
-                  {verificationResult.data.amount}
-                </div>
-
-                <div>
-                  <span className="font-semibold">Reference:</span>{" "}
-                  {verificationResult.data.reference}
-                </div>
-
-                <div>
-                  <span className="font-semibold">Reason:</span>{" "}
-                  {verificationResult.data.reason}
-                </div>
-
-                <div>
-                  <span className="font-semibold">Date:</span>{" "}
-                  {new Date(verificationResult.data.date).toLocaleString()}
-                </div>
+                <ul className="mt-4 text-sm text-red-700 list-disc pl-5">
+                  <li>Reference number may be incorrect</li>
+                  <li>Transaction may not exist</li>
+                  <li>Payment provider may be unavailable</li>
+                  <li>Please check the receipt and try again</li>
+                </ul>
               </div>
             </div>
           )}
