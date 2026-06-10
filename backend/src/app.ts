@@ -31,7 +31,7 @@ app.get("/health", (req, res) => {
     .json({ success: true, message: "Receipt Checker API is running 🚀" });
 });
 
-app.all("/api/auth/*any", toNodeHandler(auth));
+app.all("/api/auth/*path", toNodeHandler(auth));
 app.use("/api/apikey", apiKeyRoutes);
 
 app.use("/api/public", publicRoutes);

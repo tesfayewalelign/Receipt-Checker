@@ -6,6 +6,8 @@ import { DashenService } from "../../services/dashn.service";
 import { AbyssiniaService } from "../../services/abyssinia.service";
 import { MPesaService } from "../../services/mpessa.service";
 import { normalizeReceipt } from "../../../../utils/receiptNormalizer";
+import { Prisma } from "../../../../generated/prisma";
+import prisma from "../../../../config/database";
 
 export class ReceiptService {
   static async verify(bank: string, payload: any) {
@@ -62,3 +64,20 @@ export class ReceiptService {
     };
   }
 }
+export const saveReceiptIfLoggedIn = async (
+  req: any,
+  result: any,
+  bank: string,
+) => {
+  if (!req.user?.id) return;
+
+  await prisma.receiptLog.create({
+    data: {
+      userId: req.user.id,
+      reference: result.data.reference,
+      amount: result.data.amount,
+      status: result.success ? "verified" : "failed",
+      provider: bank,
+    },
+  });
+};
