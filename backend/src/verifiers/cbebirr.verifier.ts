@@ -200,9 +200,11 @@ export async function verifyCBEBirr(input: {
       return { success: false, error: "Empty response from CBE server" };
     }
 
-    const contentType = response.headers["content-type"] ?? "";
-    if (!contentType.includes("pdf")) {
+    const contentType = response.headers["content-type"];
+
+    if (typeof contentType !== "string" || !contentType.includes("pdf")) {
       logger.warn("[CBEBirr] Response content-type:", contentType);
+
       return {
         success: false,
         error:

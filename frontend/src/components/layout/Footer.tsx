@@ -95,10 +95,6 @@ export default function Footer() {
             <p className="text-gray-400 text-xs sm:text-sm">
               © 2026 ReceiptCheck. All rights reserved.
             </p>
-
-            <p className="text-gray-400 text-xs sm:text-sm">
-              Made with ❤️ in Ethiopia
-            </p>
           </div>
         </div>
       </div>

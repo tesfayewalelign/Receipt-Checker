@@ -14,7 +14,6 @@ export default function Header() {
     { name: "Features", href: "/features" },
     { name: "Verifications", href: "/#providers" },
     { name: "API Docs", href: "/api-docs" },
-    { name: "About", href: "/about" },
   ];
 
   const isActive = (path: string) => pathname === path;

@@ -1,13 +1,12 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+ 
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
 enum Role {
   developer
   admin
@@ -59,6 +58,7 @@ model Account {
   userId     String
 
   accessToken           String?
+  scope        String?  
   refreshToken          String?
   idToken               String?
   accessTokenExpiresAt  DateTime?
@@ -124,4 +124,11 @@ model ReceiptLog {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+}
+model VerificationLog {
+  id           String   @id @default(cuid())
+  status       String   // success | fraud | failed
+  provider     String
+  responseTime Int
+  createdAt    DateTime @default(now())
 }

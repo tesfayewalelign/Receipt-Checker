@@ -1,26 +1,12 @@
 import { Request, Response } from "express";
 import { DashboardService } from "./dashboard.service";
+import { getKpisService } from "./dashboard.service";
 
-export class DashboardController {
-  static async getReceipts(req: Request, res: Response) {
-    const userId = (req as any).user.id;
-
-    const data = await DashboardService.getReceipts(userId);
-
-    return res.json({
-      success: true,
-      data,
-    });
+export const getKpis = async (req: Request, res: Response) => {
+  try {
+    const data = await getKpisService();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
   }
-
-  static async getApiKeys(req: Request, res: Response) {
-    const userId = (req as any).user.id;
-
-    const data = await DashboardService.getApiKeys(userId);
-
-    res.json({
-      success: true,
-      data,
-    });
-  }
-}
+};

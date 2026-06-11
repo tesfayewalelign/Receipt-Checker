@@ -1,4 +1,4 @@
-import prisma from "../../config/database";
+import { prisma } from "../../lib/prisma";
 
 export class DashboardService {
   // 📄 Receipt History
@@ -37,3 +37,20 @@ export class DashboardService {
     };
   }
 }
+export const getKpisService = async () => {
+  const total = await prisma.verificationLog.count();
+
+  const fraud = await prisma.verificationLog.count({
+    where: { status: "fraud" },
+  });
+
+  const avg = await prisma.verificationLog.aggregate({
+    _avg: { responseTime: true },
+  });
+
+  return {
+    totalVerifications: total,
+    fraudCount: fraud,
+    avgResponseTime: avg._avg.responseTime || 0,
+  };
+};

@@ -10,7 +10,7 @@ import auth from "./lib/auth";
 import router from "./modules/verification/receipt/routes/receipt.routes";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./docs/swagger";
-
+import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 dotenv.config();
 
 const app = express();
@@ -31,12 +31,12 @@ app.get("/health", (req, res) => {
     .json({ success: true, message: "Receipt Checker API is running 🚀" });
 });
 
-app.all("/api/auth/*path", toNodeHandler(auth));
+app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use("/api/apikey", apiKeyRoutes);
 
 app.use("/api/public", publicRoutes);
 app.use("/api/verification", verificationRoutes);
-
+app.use("/api/dashboard", dashboardRoutes);
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(errorHandler);
 

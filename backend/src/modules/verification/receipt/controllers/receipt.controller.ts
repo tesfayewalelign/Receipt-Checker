@@ -8,7 +8,7 @@ export class ReceiptController {
       const { bank } = req.body;
 
       const result = await ReceiptService.verify(bank, req.body);
-      await saveReceiptIfLoggedIn(req, result, "mpesa");
+      await saveReceiptIfLoggedIn(req, result, bank);
       return res.status(200).json(result);
     } catch (error: any) {
       return res.status(500).json({

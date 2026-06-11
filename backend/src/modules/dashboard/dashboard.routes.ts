@@ -1,16 +1,12 @@
 import { Router } from "express";
-import { DashboardController } from "./dashboard.controller";
 import { rateLimitMiddleware } from "../../middlewares/rateLimit";
+import { getKpis } from "./dashboard.controller";
 
 const router = Router();
 
-// 📄 receipts history
-router.get("/receipts", rateLimitMiddleware, DashboardController.getReceipts);
-
-// 🔑 api keys
-router.get("/api-keys", rateLimitMiddleware, DashboardController.getApiKeys);
-
-// 📊 summary stats
-router.get("/summary", rateLimitMiddleware, DashboardController.getSummary);
+router.get("/kpis", getKpis);
+router.get("/monthly", getKpis);
+router.get("/response-time", getKpis);
+router.get("/providers", getKpis);
 
 export default router;

@@ -6,6 +6,8 @@ import { Mail, Lock, Building2, Globe, GitBranch } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
+import { FaGithub } from "react-icons/fa";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -81,7 +83,7 @@ export default function SignUpPage() {
   const handleSocialSignup = async (provider: "google" | "github") => {
     await authClient.signIn.social({
       provider,
-      callbackURL: "/dashboard",
+      callbackURL: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
     });
   };
 
@@ -116,7 +118,7 @@ export default function SignUpPage() {
               onClick={() => handleSocialSignup("google")}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 px-4 py-3 text-sm sm:text-base font-medium text-gray-700 transition-all duration-300 hover:border-gray-400 hover:bg-gray-50"
             >
-              <Globe className="h-5 w-5" />
+              <FcGoogle className="h-5 w-5" />
               Continue with Google
             </button>
 
@@ -126,7 +128,7 @@ export default function SignUpPage() {
               onClick={() => handleSocialSignup("github")}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 px-4 py-3 text-sm sm:text-base font-medium text-gray-700 transition-all duration-300 hover:border-gray-400 hover:bg-gray-50"
             >
-              <GitBranch className="h-5 w-5" />
+              <FaGithub className="h-5 w-5" />
               Continue with GitHub
             </button>
           </div>

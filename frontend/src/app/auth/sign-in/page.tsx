@@ -5,6 +5,8 @@ import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, Globe, GitBranch } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { FcGoogle } from "react-icons/fc";
+import { FaGithub } from "react-icons/fa";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function SignInPage() {
@@ -42,7 +44,7 @@ export default function SignInPage() {
   const handleSocialLogin = async (provider: "google" | "github") => {
     await authClient.signIn.social({
       provider,
-      callbackURL: "/dashboard",
+      callbackURL: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
     });
   };
 
@@ -78,7 +80,7 @@ export default function SignInPage() {
               onClick={() => handleSocialLogin("google")}
               className="w-full flex items-center justify-center gap-3 border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 py-3 rounded-xl transition-all duration-300"
             >
-              <Globe className="w-5 h-5 text-gray-700" />
+              <FcGoogle className="w-5 h-5" />
               <span className="font-medium text-gray-800">
                 Continue with Google
               </span>
@@ -89,7 +91,7 @@ export default function SignInPage() {
               onClick={() => handleSocialLogin("github")}
               className="w-full flex items-center justify-center gap-3 border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 py-3 rounded-xl transition-all duration-300"
             >
-              <GitBranch className="w-5 h-5 text-gray-700" />
+              <FaGithub className="w-5 h-5" />
               <span className="font-medium text-gray-800">
                 Continue with GitHub
               </span>
