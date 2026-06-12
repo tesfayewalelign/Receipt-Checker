@@ -54,3 +54,29 @@ export const getKpisService = async () => {
     avgResponseTime: avg._avg.responseTime || 0,
   };
 };
+export const getProfile = async (userId: string) => {
+  return await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      companyName: true,
+      image: true,
+    },
+  });
+};
+export const updateProfile = async (userId: string, data: any) => {
+  return prisma.user.update({
+    where: {
+      id: userId,
+    },
+    data: {
+      name: `${data.firstName} ${data.lastName}`,
+
+      companyName: data.companyName,
+
+      image: data.image,
+    },
+  });
+};

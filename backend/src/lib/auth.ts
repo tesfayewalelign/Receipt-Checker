@@ -32,6 +32,18 @@ export const auth = betterAuth({
 
   secret: process.env.BETTER_AUTH_SECRET!,
   baseURL: process.env.BETTER_AUTH_URL!,
+  callbacks: {
+    signUp: async ({ user }: { user: any }) => {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name: user.name || "New User",
+          companyName: "",
+          image: user.image || "",
+        },
+      });
+    },
+  },
 });
 
 export default auth;

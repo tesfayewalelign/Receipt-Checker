@@ -1,275 +1,240 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  User,
-  Lock,
-  Bell,
-  CreditCard,
-  Trash2,
-  CheckCircle,
-  Camera,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { authClient } from "@/lib/auth-client";
+import { User, Lock, CheckCircle } from "lucide-react";
 
-type Tab = "profile" | "security" | "notifications" | "billing";
-
-const PLANS = [
-  {
-    id: "free",
-    name: "Free",
-    price: "ETB 0",
-    limit: "100 req/mo",
-    current: false,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "ETB 499",
-    limit: "5,000 req/mo",
-    current: true,
-  },
-  {
-    id: "business",
-    name: "Business",
-    price: "ETB 1,999",
-    limit: "50,000 req/mo",
-    current: false,
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: "Custom",
-    limit: "Unlimited",
-    current: false,
-  },
-];
-
-const INVOICES = [
-  { id: "INV-2026-06", date: "Jun 1, 2026", amount: "ETB 499", status: "Paid" },
-  { id: "INV-2026-05", date: "May 1, 2026", amount: "ETB 499", status: "Paid" },
-  { id: "INV-2026-04", date: "Apr 1, 2026", amount: "ETB 499", status: "Paid" },
-];
+type Tab = "profile" | "security";
 
 export default function SettingsPage() {
-  const router = useRouter();
-
   const [tab, setTab] = useState<Tab>("profile");
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // PROFILE
   const [profile, setProfile] = useState({
-    firstName: "Abebe",
-    lastName: "Bikila",
-    email: "abebe@example.com",
-    phone: "+251911234567",
-    company: "Addis Fintech Solutions",
-    website: "https://addisfintech.et",
-    timezone: "Africa/Addis_Ababa",
+    name: "",
+    email: "",
+    companyName: "",
+    image: "",
   });
 
+  // PASSWORD
   const [passwords, setPasswords] = useState({
     current: "",
     next: "",
     confirm: "",
   });
 
-  const [notifs, setNotifs] = useState({
-    verificationSuccess: true,
-    fraudDetected: true,
-    apiKeyCreated: true,
-    usageAlerts: true,
-    weeklyReport: false,
-    productUpdates: false,
-  });
+  /* ───────── LOAD PROFILE ───────── */
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
 
-  const handleSave = async () => {
-    // 👉 later connect backend API here
-    // await fetch('/api/settings', { method: 'POST', body: JSON.stringify(...) })
+        // 1. Get session (Better Auth)
+        const session = await authClient.getSession();
 
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+        // 2. Get backend profile (DB extra data)
+        const res = await fetch("http://localhost:5000/api/dashboard/profile", {
+          credentials: "include",
+        });
+
+        const data = await res.json();
+
+        // 3. MERGE BOTH (IMPORTANT)
+        setProfile({
+          name: session?.data?.user?.name || data.name || "New User",
+          email: session?.data?.user?.email || data.email || "",
+          companyName: data.company || "",
+          image: session?.data?.user?.image || data.image || "",
+        });
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  /* ───────── SAVE PROFILE ───────── */
+  const handleSaveProfile = async () => {
+    try {
+      if (!profile.name.trim()) {
+        alert("Name is required");
+        return;
+      }
+
+      const res = await fetch("http://localhost:5000/api/dashboard/profile", {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: profile.name,
+          companyName: profile.companyName,
+          image: profile.image,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Profile update failed");
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      console.error(err);
+      alert("Profile update failed");
+    }
   };
 
-  const tabs: { id: Tab; label: string; icon: any }[] = [
-    { id: "profile", label: "Profile", icon: User },
-    { id: "security", label: "Security", icon: Lock },
-    { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "billing", label: "Billing", icon: CreditCard },
-  ];
+  /* ───────── CHANGE PASSWORD ───────── */
+  const handleChangePassword = async () => {
+    try {
+      if (!passwords.current || !passwords.next) {
+        alert("Fill all password fields");
+        return;
+      }
+
+      if (passwords.next !== passwords.confirm) {
+        alert("Passwords do not match");
+        return;
+      }
+
+      const res = await fetch(
+        "http://localhost:5000/api/dashboard/change-password",
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            currentPassword: passwords.current,
+            newPassword: passwords.next,
+          }),
+        },
+      );
+
+      if (!res.ok) throw new Error("Password update failed");
+
+      setSaved(true);
+      setPasswords({ current: "", next: "", confirm: "" });
+
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      console.error(err);
+      alert("Password update failed");
+    }
+  };
+
+  /* ───────── UI ───────── */
+  if (loading) {
+    return <div className="text-white p-10">Loading settings...</div>;
+  }
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-white text-2xl font-bold">Settings</h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Manage your account preferences and billing.
-        </p>
-      </div>
+    <div className="p-6 max-w-3xl mx-auto text-white">
+      {/* HEADER */}
+      <h1 className="text-2xl font-bold mb-6">Settings</h1>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1 mb-6 overflow-x-auto">
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              tab === id
-                ? "bg-emerald-500/20 text-emerald-400"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Saved message */}
+      {/* SUCCESS */}
       {saved && (
-        <div className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 rounded-xl px-4 py-3 mb-5 text-emerald-400 text-sm font-semibold">
-          <CheckCircle className="w-4 h-4" />
-          Changes saved successfully.
+        <div className="mb-4 flex items-center gap-2 text-emerald-400">
+          <CheckCircle size={18} />
+          Saved successfully
         </div>
       )}
 
-      {/* PROFILE */}
+      {/* TABS */}
+      <div className="flex gap-3 mb-6">
+        <button onClick={() => setTab("profile")}>Profile</button>
+        <button onClick={() => setTab("security")}>Security</button>
+      </div>
+
+      {/* ───────── PROFILE ───────── */}
       {tab === "profile" && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
-          <div className="flex items-center gap-5">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white font-bold text-xl">
-                AB
-              </div>
-              <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-slate-800 border border-slate-600 rounded-full flex items-center justify-center">
-                <Camera className="w-3.5 h-3.5 text-white" />
-              </button>
+        <div className="bg-slate-900 p-6 rounded-xl space-y-4">
+          {/* avatar */}
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold">
+              {profile.name?.trim()?.[0]?.toUpperCase() || "U"}
             </div>
+
             <div>
-              <p className="text-white font-bold">Abebe Bikila</p>
-              <p className="text-slate-400 text-sm">{profile.email}</p>
+              <p className="font-bold">{profile.name}</p>
+              <p className="text-slate-400 text-sm">
+                {profile.email || "No email found"}
+              </p>
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            {Object.keys(profile).map((key) => (
-              <div key={key}>
-                <label className="text-slate-400 text-xs">{key}</label>
-                <input
-                  className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-2 mt-1 text-sm"
-                  value={(profile as any)[key]}
-                  onChange={(e) =>
-                    setProfile({ ...profile, [key]: e.target.value })
-                  }
-                />
-              </div>
-            ))}
-          </div>
+          {/* inputs */}
+          <input
+            className="w-full p-2 bg-slate-800 rounded"
+            placeholder="Full Name"
+            value={profile.name}
+            onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+          />
 
-          <div className="flex justify-end">
-            <button
-              onClick={handleSave}
-              className="bg-emerald-500 hover:bg-emerald-400 px-5 py-2 rounded-xl text-white font-semibold"
-            >
-              Save Changes
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* SECURITY */}
-      {tab === "security" && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-          <h2 className="text-white font-bold">Change Password</h2>
-
-          {Object.keys(passwords).map((key) => (
-            <input
-              key={key}
-              type="password"
-              placeholder={key}
-              className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-2 text-sm"
-              value={(passwords as any)[key]}
-              onChange={(e) =>
-                setPasswords({ ...passwords, [key]: e.target.value })
-              }
-            />
-          ))}
+          <input
+            className="w-full p-2 bg-slate-800 rounded"
+            placeholder="Company Name"
+            value={profile.companyName}
+            onChange={(e) =>
+              setProfile({ ...profile, companyName: e.target.value })
+            }
+          />
 
           <button
-            onClick={handleSave}
-            className="bg-emerald-500 hover:bg-emerald-400 px-5 py-2 rounded-xl text-white font-semibold"
+            onClick={handleSaveProfile}
+            className="bg-emerald-500 px-4 py-2 rounded font-semibold"
+          >
+            Save Profile
+          </button>
+        </div>
+      )}
+
+      {/* ───────── SECURITY ───────── */}
+      {tab === "security" && (
+        <div className="bg-slate-900 p-6 rounded-xl space-y-3">
+          <input
+            type="password"
+            placeholder="Current password"
+            className="w-full p-2 bg-slate-800 rounded"
+            value={passwords.current}
+            onChange={(e) =>
+              setPasswords({ ...passwords, current: e.target.value })
+            }
+          />
+
+          <input
+            type="password"
+            placeholder="New password"
+            className="w-full p-2 bg-slate-800 rounded"
+            value={passwords.next}
+            onChange={(e) =>
+              setPasswords({ ...passwords, next: e.target.value })
+            }
+          />
+
+          <input
+            type="password"
+            placeholder="Confirm password"
+            className="w-full p-2 bg-slate-800 rounded"
+            value={passwords.confirm}
+            onChange={(e) =>
+              setPasswords({ ...passwords, confirm: e.target.value })
+            }
+          />
+
+          <button
+            onClick={handleChangePassword}
+            className="bg-red-500 px-4 py-2 rounded font-semibold"
           >
             Update Password
           </button>
-        </div>
-      )}
-
-      {/* NOTIFICATIONS */}
-      {tab === "notifications" && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <h2 className="text-white font-bold mb-4">
-            Notification Preferences
-          </h2>
-
-          {Object.keys(notifs).map((key) => (
-            <div
-              key={key}
-              className="flex justify-between py-3 border-b border-slate-800"
-            >
-              <span className="text-slate-300 text-sm">{key}</span>
-
-              <button
-                onClick={() =>
-                  setNotifs({
-                    ...notifs,
-                    [key]: !notifs[key as keyof typeof notifs],
-                  })
-                }
-                className={`w-11 h-6 rounded-full ${
-                  notifs[key as keyof typeof notifs]
-                    ? "bg-emerald-500"
-                    : "bg-slate-700"
-                }`}
-              />
-            </div>
-          ))}
-
-          <button
-            onClick={handleSave}
-            className="mt-4 bg-emerald-500 px-5 py-2 rounded-xl text-white font-semibold"
-          >
-            Save Preferences
-          </button>
-        </div>
-      )}
-
-      {/* BILLING */}
-      {tab === "billing" && (
-        <div className="space-y-5">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-            <h2 className="text-white font-bold mb-4">Plans</h2>
-
-            {PLANS.map((plan) => (
-              <div
-                key={plan.id}
-                className="border border-slate-700 p-4 rounded-xl mb-3"
-              >
-                <p className="text-white font-bold">{plan.name}</p>
-                <p className="text-slate-400 text-sm">{plan.price}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-            <h2 className="text-white font-bold mb-4">Invoices</h2>
-
-            {INVOICES.map((inv) => (
-              <div key={inv.id} className="flex justify-between py-2">
-                <span className="text-slate-300">{inv.id}</span>
-                <span className="text-white">{inv.amount}</span>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>
