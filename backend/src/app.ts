@@ -5,7 +5,7 @@ import { toNodeHandler } from "better-auth/node";
 import { errorHandler } from "./middlewares/error.middleware";
 import verificationRoutes from "./modules/verification/routes/index";
 import publicRoutes from "./modules/verification/routes/public.routes";
-import apiKeyRoutes from "./modules/verification/routes/apiKeys.routes";
+import apiKeyRoutes from "./modules/api-keys/apiKey.routes";
 import auth from "./lib/auth";
 import router from "./modules/verification/receipt/routes/receipt.routes";
 import swaggerUi from "swagger-ui-express";
@@ -32,11 +32,11 @@ app.get("/health", (req, res) => {
 });
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
-app.use("/api/apikey", apiKeyRoutes);
 
 app.use("/api/public", publicRoutes);
 app.use("/api/verification", verificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/keys", apiKeyRoutes);
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(errorHandler);
 
