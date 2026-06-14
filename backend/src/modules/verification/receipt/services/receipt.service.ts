@@ -8,6 +8,7 @@ import { MPesaService } from "../../services/mpessa.service";
 import { normalizeReceipt } from "../../../../utils/receiptNormalizer";
 import { Prisma } from "../../../../generated/prisma";
 import prisma from "../../../../config/database";
+import auth from "../../../../lib/auth";
 
 export class ReceiptService {
   static async verify(bank: string, payload: any) {
@@ -69,15 +70,24 @@ export const saveReceiptIfLoggedIn = async (
   result: any,
   bank: string,
 ) => {
-  if (!req.user?.id) return;
+  const session = await auth.api.getSession({
+    headers: new Headers(req.headers as HeadersInit),
+  });
 
-  await prisma.receiptLog.create({
+  if (!session?.user?.id) {
+    console.log("Guest user - not saving receipt");
+    return;
+  }
+
+  const receipt = await prisma.receiptLog.create({
     data: {
-      userId: req.user.id,
+      userId: session.user.id,
       reference: result.data.reference,
       amount: result.data.amount,
       status: result.success ? "verified" : "failed",
       provider: bank,
     },
   });
+
+  console.log("Receipt saved:", receipt.id);
 };

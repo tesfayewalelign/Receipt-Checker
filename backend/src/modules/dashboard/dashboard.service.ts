@@ -1,7 +1,6 @@
 import { prisma } from "../../lib/prisma";
 
 export class DashboardService {
-  // 📄 Receipt History
   static async getReceipts(userId: string) {
     return await prisma.receiptLog.findMany({
       where: { userId },
@@ -9,7 +8,6 @@ export class DashboardService {
     });
   }
 
-  // 🔑 API Keys
   static async getApiKeys(userId: string) {
     return await prisma.apiKey.findMany({
       where: { userId },
@@ -17,7 +15,6 @@ export class DashboardService {
     });
   }
 
-  // 📊 Summary Stats
   static async getSummary(userId: string) {
     const receipts = await prisma.receiptLog.findMany({
       where: { userId },
@@ -79,4 +76,54 @@ export const updateProfile = async (userId: string, data: any) => {
       image: data.image,
     },
   });
+};
+export const getOverviewService = async (userId: string) => {
+  const totalReceipts = await prisma.receiptLog.count({
+    where: {
+      userId,
+    },
+  });
+
+  const verifiedReceipts = await prisma.receiptLog.count({
+    where: {
+      userId,
+      status: "verified",
+    },
+  });
+
+  const failedReceipts = await prisma.receiptLog.count({
+    where: {
+      userId,
+      status: "failed",
+    },
+  });
+
+  const amountData = await prisma.receiptLog.aggregate({
+    where: {
+      userId,
+    },
+    _sum: {
+      amount: true,
+    },
+  });
+
+  const recentReceipts = await prisma.receiptLog.findMany({
+    where: {
+      userId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 5,
+  });
+
+  return {
+    stats: {
+      totalReceipts,
+      verifiedReceipts,
+      failedReceipts,
+      totalAmount: amountData._sum.amount || 0,
+    },
+    recentReceipts,
+  };
 };

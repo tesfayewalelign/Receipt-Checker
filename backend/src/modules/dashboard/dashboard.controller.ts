@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { getKpisService, getProfile } from "./dashboard.service";
 import { auth } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
-
+import { getOverviewService } from "./dashboard.service";
 /* ───────────────── KPI ───────────────── */
 export const getKpis = async (_req: Request, res: Response) => {
   try {
@@ -119,6 +119,22 @@ export const changePassword = async (req: Request, res: Response) => {
     return res.status(400).json({
       success: false,
       message: err?.message || "Password change failed",
+    });
+  }
+};
+export const getOverview = async (req: any, res: Response) => {
+  try {
+    const userId = req.user.id;
+
+    const data = await getOverviewService(userId);
+
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to load dashboard",
     });
   }
 };

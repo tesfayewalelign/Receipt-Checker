@@ -8,6 +8,8 @@ import publicRoutes from "./modules/verification/routes/public.routes";
 import apiKeyRoutes from "./modules/api-keys/apiKey.routes";
 import auth from "./lib/auth";
 import router from "./modules/verification/receipt/routes/receipt.routes";
+import historyRoutes from "./modules/history/history.routes";
+
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./docs/swagger";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
@@ -36,6 +38,7 @@ app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use("/api/public", publicRoutes);
 app.use("/api/verification", verificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/history", historyRoutes);
 app.use("/api/keys", apiKeyRoutes);
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(errorHandler);
