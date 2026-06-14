@@ -30,7 +30,7 @@ export default function AnalyticsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6">
+    <div>
       <h1 className="text-white text-2xl font-bold mb-6">Analytics</h1>
 
       {/* LOADING STATE */}

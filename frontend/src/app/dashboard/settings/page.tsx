@@ -152,7 +152,7 @@ export default function SettingsPage() {
   /* ───────── UI ───────── */
   return (
     <div className="min-h-screen bg-[#0a0c10] text-white">
-      <div className="max-w-3xl mx-auto px-6 py-12">
+      <div className="max-w-3xl mx-auto">
         {/* HEADER */}
         <div className="mb-8">
           <h1 className="text-xl font-semibold tracking-tight mb-2">

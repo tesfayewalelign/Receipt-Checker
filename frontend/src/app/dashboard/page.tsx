@@ -93,7 +93,7 @@ export default function OverviewPage() {
   const [period, setPeriod] = useState("7d");
 
   return (
-    <div className="p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-8">
       {/* HEADER */}
       <div className="flex items-center justify-between">
         <div>

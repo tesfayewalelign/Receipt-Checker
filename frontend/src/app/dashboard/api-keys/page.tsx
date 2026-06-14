@@ -142,7 +142,7 @@ export default function ApiKeysPage() {
 
   /* ───────── UI ───────── */
   return (
-    <div className="max-w-3xl mx-auto px-6 py-12">
+    <div className="max-w-3xl mx-auto">
       {/* HEADER */}
       <div className="mb-8">
         <div className="flex items-center gap-2.5 mb-2">
