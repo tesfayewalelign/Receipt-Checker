@@ -103,12 +103,22 @@ export default function OverviewPage() {
           </p>
         </div>
 
-        <Link
-          href="/dashboard/api-keys"
-          className="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold"
-        >
-          Generate API Key
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/verify"
+            className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-600 transition"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            Verify Receipt
+          </Link>
+
+          <Link
+            href="/dashboard/api-keys"
+            className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold border border-slate-700 hover:bg-slate-700 transition"
+          >
+            Generate API Key
+          </Link>
+        </div>
       </div>
 
       {/* STATS */}

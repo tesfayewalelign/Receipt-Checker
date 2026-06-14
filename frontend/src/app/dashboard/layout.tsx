@@ -15,10 +15,12 @@ import {
   ChevronRight,
   Bell,
   Zap,
+  ShieldCheck,
 } from "lucide-react";
 
 const navItems = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { to: "/dashboard/verify", label: "Verify Receipt", icon: ShieldCheck },
   { to: "/dashboard/api-keys", label: "API Keys", icon: Key },
   { to: "/dashboard/history", label: "Receipt History", icon: History },
   { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },

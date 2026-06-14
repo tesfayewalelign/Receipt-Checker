@@ -1,27 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { Search } from "lucide-react";
+import Link from "next/link";
+import { ShieldCheck, ChevronRight } from "lucide-react";
 
-export default function QuickVerify() {
-  const [ref, setRef] = useState("");
+const providers = [
+  { name: "Commercial Bank of Ethiopia", id: "cbe" },
+  { name: "Telebirr", id: "telebirr" },
+  { name: "CBE Birr", id: "cbe-birr" },
+  { name: "Bank of Abyssinia", id: "boa" },
+  { name: "Awash Bank", id: "awash" },
+  { name: "Dashen Bank", id: "dashen" },
+  { name: "M-Pesa Ethiopia", id: "mpesa" },
+];
 
+export default function DashboardVerifyPage() {
   return (
-    <div className="bg-white p-6 rounded-2xl border shadow-sm">
-      <h2 className="text-lg font-semibold mb-4">Quick Verification</h2>
+    <div className="max-w-5xl mx-auto space-y-8">
+      {/* HEADER */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+          <ShieldCheck className="w-5 h-5 text-emerald-400" />
+        </div>
+        <div>
+          <h1 className="text-white text-2xl font-bold">Verify Receipt</h1>
+          <p className="text-slate-400 text-sm">
+            Select a bank or mobile money service to verify a receipt
+          </p>
+        </div>
+      </div>
 
-      <div className="flex gap-3">
-        <input
-          value={ref}
-          onChange={(e) => setRef(e.target.value)}
-          placeholder="Enter transaction reference"
-          className="flex-1 border rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500"
-        />
-
-        <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-xl flex items-center gap-2">
-          <Search className="w-4 h-4" />
-          Verify
-        </button>
+      {/* PROVIDERS */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {providers.map((p) => (
+          <Link
+            key={p.id}
+            href={`/dashboard/verify/${p.id}`}
+            className="group bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-emerald-500/50 hover:bg-slate-800/60 transition flex items-center justify-between"
+          >
+            <div>
+              <div className="text-white font-semibold">{p.name}</div>
+              <div className="text-slate-400 text-sm mt-1">Click to verify</div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-emerald-400 transition" />
+          </Link>
+        ))}
       </div>
     </div>
   );
