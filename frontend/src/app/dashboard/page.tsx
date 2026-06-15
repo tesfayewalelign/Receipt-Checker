@@ -1,103 +1,107 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
-  TrendingUp,
   Activity,
-  ShieldAlert,
-  ArrowUpRight,
-  ArrowDownRight,
-  Clock,
+  XCircle,
   Banknote,
-  Smartphone,
-  Building2,
+  ShieldCheck,
+  ChevronRight,
 } from "lucide-react";
 
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  AreaChart,
-  Area,
 } from "recharts";
 
-const weekData = [
-  { day: "Mon", verifications: 142, fraud: 1 },
-  { day: "Tue", verifications: 189, fraud: 0 },
-  { day: "Wed", verifications: 234, fraud: 2 },
-  { day: "Thu", verifications: 178, fraud: 1 },
-  { day: "Fri", verifications: 312, fraud: 3 },
-  { day: "Sat", verifications: 98, fraud: 0 },
-  { day: "Sun", verifications: 94, fraud: 0 },
-];
+import {
+  fetchOverview,
+  providerLabel,
+  formatAmount,
+  relativeTime,
+  UnauthorizedError,
+  type OverviewResponse,
+} from "@/lib/history";
 
-const recentHistory = [
-  {
-    id: "TXN-8841",
-    provider: "Telebirr",
-    amount: "ETB 2,500",
-    status: "verified",
-    time: "2 min ago",
-    ref: "TLB-20260611-9921",
-  },
-  {
-    id: "TXN-8840",
-    provider: "CBE",
-    amount: "ETB 15,000",
-    status: "verified",
-    time: "12 min ago",
-    ref: "CBE-20260611-4471",
-  },
-  {
-    id: "TXN-8839",
-    provider: "Awash Bank",
-    amount: "ETB 800",
-    status: "fraud",
-    time: "1 hr ago",
-    ref: "AWB-20260611-0012",
-  },
-];
-
-const stats = [
-  {
-    label: "Verifications",
-    value: "1,247",
-    delta: "+12.4%",
-    up: true,
-    icon: CheckCircle2,
-  },
-  {
-    label: "Success Rate",
-    value: "98.5%",
-    delta: "+0.3%",
-    up: true,
-    icon: TrendingUp,
-  },
-  {
-    label: "Avg Time",
-    value: "178ms",
-    delta: "-14ms",
-    up: true,
-    icon: Activity,
-  },
-  { label: "Fraud", value: "3", delta: "+1", up: false, icon: ShieldAlert },
+/* Illustrative weekly trend — no per-day aggregation endpoint exists yet. */
+const sampleWeek = [
+  { day: "Mon", verifications: 142 },
+  { day: "Tue", verifications: 189 },
+  { day: "Wed", verifications: 234 },
+  { day: "Thu", verifications: 178 },
+  { day: "Fri", verifications: 312 },
+  { day: "Sat", verifications: 98 },
+  { day: "Sun", verifications: 94 },
 ];
 
 export default function OverviewPage() {
-  const [period, setPeriod] = useState("7d");
+  const router = useRouter();
+  const [data, setData] = useState<OverviewResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetchOverview();
+        if (active) setData(res);
+      } catch (err) {
+        if (!active) return;
+        if (err instanceof UnauthorizedError) {
+          router.push("/auth/sign-in");
+          return;
+        }
+        console.error("Failed loading overview", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  const stats = data?.stats;
+  const recent = data?.recentReceipts ?? [];
+
+  const cards = [
+    {
+      label: "Verifications",
+      value: stats?.totalReceipts ?? 0,
+      icon: CheckCircle2,
+    },
+    {
+      label: "Verified",
+      value: stats?.verifiedReceipts ?? 0,
+      icon: ShieldCheck,
+    },
+    {
+      label: "Failed",
+      value: stats?.failedReceipts ?? 0,
+      icon: XCircle,
+    },
+    {
+      label: "Total Amount",
+      value: formatAmount(stats?.totalAmount ?? 0),
+      icon: Banknote,
+    },
+  ];
 
   return (
     <div className="space-y-8">
       {/* HEADER */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-white text-2xl font-bold">Welcome back 👋</h1>
+          <h1 className="text-white text-2xl font-bold">Welcome back</h1>
           <p className="text-slate-400 text-sm mt-1">
             Monitor your receipt verification activity
           </p>
@@ -108,7 +112,7 @@ export default function OverviewPage() {
             href="/dashboard/verify"
             className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-600 transition"
           >
-            <ShieldAlert className="w-4 h-4" />
+            <ShieldCheck className="w-4 h-4" />
             Verify Receipt
           </Link>
 
@@ -123,7 +127,7 @@ export default function OverviewPage() {
 
       {/* STATS */}
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {stats.map((s) => {
+        {cards.map((s) => {
           const Icon = s.icon;
           return (
             <div
@@ -132,17 +136,14 @@ export default function OverviewPage() {
             >
               <div className="flex justify-between items-center">
                 <Icon className="text-emerald-400 w-5 h-5" />
-                <span
-                  className={
-                    s.up ? "text-emerald-400 text-xs" : "text-red-400 text-xs"
-                  }
-                >
-                  {s.delta}
-                </span>
               </div>
 
               <div className="text-white text-2xl font-bold mt-3">
-                {s.value}
+                {loading ? (
+                  <span className="inline-block h-7 w-20 bg-white/[0.06] rounded animate-pulse" />
+                ) : (
+                  s.value
+                )}
               </div>
 
               <div className="text-slate-400 text-sm">{s.label}</div>
@@ -153,14 +154,26 @@ export default function OverviewPage() {
 
       {/* CHART */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-        <h2 className="text-white font-bold mb-4">Verification Activity</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white font-bold">Verification Activity</h2>
+          <span className="text-[11px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+            Sample data
+          </span>
+        </div>
 
         <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={weekData}>
+          <AreaChart data={sampleWeek}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
             <XAxis dataKey="day" stroke="#64748b" />
             <YAxis stroke="#64748b" />
-            <Tooltip />
+            <Tooltip
+              contentStyle={{
+                background: "#0f172a",
+                border: "1px solid #1e293b",
+                borderRadius: 8,
+                color: "#fff",
+              }}
+            />
             <Area
               type="monotone"
               dataKey="verifications"
@@ -173,25 +186,67 @@ export default function OverviewPage() {
 
       {/* RECENT */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl">
-        <div className="p-4 border-b border-slate-800">
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <h2 className="text-white font-bold">Recent Verifications</h2>
+          <Link
+            href="/dashboard/history"
+            className="flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition"
+          >
+            View all
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
 
-        <div className="divide-y divide-slate-800">
-          {recentHistory.map((r) => (
-            <div key={r.id} className="p-4 flex justify-between">
-              <div>
-                <p className="text-white text-sm">{r.provider}</p>
-                <p className="text-slate-400 text-xs">{r.ref}</p>
+        {loading ? (
+          <div className="divide-y divide-slate-800">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="p-4 flex justify-between animate-pulse"
+              >
+                <div className="space-y-2">
+                  <div className="h-3.5 w-28 bg-white/[0.06] rounded" />
+                  <div className="h-3 w-40 bg-white/[0.04] rounded" />
+                </div>
+                <div className="h-3.5 w-16 bg-white/[0.06] rounded" />
               </div>
-
-              <div className="text-right">
-                <p className="text-white text-sm">{r.amount}</p>
-                <p className="text-slate-400 text-xs">{r.time}</p>
-              </div>
+            ))}
+          </div>
+        ) : recent.length === 0 ? (
+          <div className="p-8 flex flex-col items-center text-center">
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/[0.04] mb-3">
+              <Activity size={18} className="text-slate-500" />
             </div>
-          ))}
-        </div>
+            <p className="text-sm font-medium text-slate-300">
+              No verifications yet
+            </p>
+            <p className="text-sm text-slate-500 mt-1">
+              Verify your first receipt to see it here.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-800">
+            {recent.map((r) => (
+              <div key={r.id} className="p-4 flex justify-between">
+                <div>
+                  <p className="text-white text-sm">
+                    {providerLabel(r.provider)}
+                  </p>
+                  <p className="text-slate-400 text-xs font-mono">
+                    {r.reference}
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-white text-sm">{formatAmount(r.amount)}</p>
+                  <p className="text-slate-400 text-xs">
+                    {relativeTime(r.createdAt)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

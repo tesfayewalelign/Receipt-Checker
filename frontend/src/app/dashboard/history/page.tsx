@@ -1,5 +1,7 @@
 "use client";
-import { useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   CheckCircle2,
@@ -12,76 +14,42 @@ import {
   Hash,
   Wallet,
   Calendar,
-  Gauge,
-  Percent,
-  StickyNote,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  fetchHistory,
+  providerLabel,
+  formatAmount,
+  formatDate,
+  relativeTime,
+  UnauthorizedError,
+  type ReceiptLog,
+} from "@/lib/history";
 
-interface Receipt {
-  id: string;
-  txnRef: string;
-  provider: string;
-  amount: string;
-  account: string;
-  date: string;
-  submittedAt: string;
-  status: "verified" | "fraud" | "pending" | "failed";
-  responseTime: string;
-  confidence: number;
-  notes: string;
-}
-
-/* MOCK DATA (keep for now) */
-const allReceipts: Receipt[] = [
+/* Visual style per status — emerald for verified, slate for everything else. */
+const STATUS: Record<
+  string,
   {
-    id: "1",
-    txnRef: "TLB-20260611-9921",
-    provider: "Telebirr",
-    amount: "ETB 2,500",
-    account: "••••3291",
-    date: "2026-06-11",
-    submittedAt: "2 min ago",
-    status: "verified",
-    responseTime: "142ms",
-    confidence: 99,
-    notes: "Transaction confirmed via Telebirr API.",
-  },
-  {
-    id: "2",
-    txnRef: "CBE-20260611-4471",
-    provider: "CBE",
-    amount: "ETB 15,000",
-    account: "••••7812",
-    date: "2026-06-11",
-    submittedAt: "12 min ago",
-    status: "verified",
-    responseTime: "188ms",
-    confidence: 97,
-    notes: "Amount and reference match.",
-  },
-  {
-    id: "3",
-    txnRef: "AWB-20260611-0012",
-    provider: "Awash Bank",
-    amount: "ETB 800",
-    account: "••••4400",
-    date: "2026-06-11",
-    submittedAt: "1 hr ago",
-    status: "fraud",
-    responseTime: "210ms",
-    confidence: 12,
-    notes: "Reference not found in system.",
-  },
-];
-
-/* SIMPLIFIED — emerald for verified, slate for everything else (matches API Keys / Settings theme) */
-const STATUS = {
+    label: string;
+    icon: typeof CheckCircle2;
+    color: string;
+    bg: string;
+    border: string;
+  }
+> = {
   verified: {
     label: "Verified",
     icon: CheckCircle2,
     color: "text-emerald-400",
     bg: "bg-emerald-500/10",
     border: "border-emerald-500/20",
+  },
+  failed: {
+    label: "Failed",
+    icon: XCircle,
+    color: "text-slate-400",
+    bg: "bg-slate-500/10",
+    border: "border-slate-500/20",
   },
   fraud: {
     label: "Fraud",
@@ -97,37 +65,72 @@ const STATUS = {
     bg: "bg-slate-500/10",
     border: "border-slate-500/20",
   },
-  failed: {
-    label: "Failed",
-    icon: XCircle,
-    color: "text-slate-400",
-    bg: "bg-slate-500/10",
-    border: "border-slate-500/20",
-  },
 };
 
+function statusStyle(status: string) {
+  return STATUS[status] ?? STATUS.failed;
+}
+
+const PAGE_SIZE = 8;
+
 export default function HistoryPage() {
+  const router = useRouter();
+
+  const [receipts, setReceipts] = useState<ReceiptLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [detail, setDetail] = useState<Receipt | null>(null);
+  const [detail, setDetail] = useState<ReceiptLog | null>(null);
 
-  const filtered = allReceipts.filter((r) => {
-    const matchSearch =
-      r.txnRef.toLowerCase().includes(search.toLowerCase()) ||
-      r.provider.toLowerCase().includes(search.toLowerCase());
+  /* LOAD REAL DATA */
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await fetchHistory();
+        if (active) setReceipts(data);
+      } catch (err) {
+        if (!active) return;
+        if (err instanceof UnauthorizedError) {
+          router.push("/auth/sign-in");
+          return;
+        }
+        console.error("Failed loading history", err);
+        setError("Couldn't load your receipt history. Please try again.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
-    const matchStatus = status === "all" || r.status === status;
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return receipts.filter((r) => {
+      const matchSearch =
+        r.reference.toLowerCase().includes(q) ||
+        providerLabel(r.provider).toLowerCase().includes(q);
+      const matchStatus = status === "all" || r.status === status;
+      return matchSearch && matchStatus;
+    });
+  }, [receipts, search, status]);
 
-    return matchSearch && matchStatus;
-  });
-
-  const PAGE_SIZE = 5;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageData = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const safePage = Math.min(page, totalPages);
+  const pageData = filtered.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
 
   return (
-    <div className="min-h-screen bg-[#0a0c10] text-white">
+    <div className="min-h-full text-white">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* HEADER */}
         <div>
@@ -169,8 +172,6 @@ export default function HistoryPage() {
           >
             <option value="all">All statuses</option>
             <option value="verified">Verified</option>
-            <option value="fraud">Fraud</option>
-            <option value="pending">Pending</option>
             <option value="failed">Failed</option>
           </select>
         </div>
@@ -179,21 +180,51 @@ export default function HistoryPage() {
         <div className="bg-[#11141a] border border-white/[0.06] rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-white/[0.06]">
             <span className="text-xs font-medium text-slate-400">
-              {filtered.length} result{filtered.length === 1 ? "" : "s"}
+              {loading
+                ? "Loading…"
+                : `${filtered.length} result${filtered.length === 1 ? "" : "s"}`}
             </span>
           </div>
 
-          {pageData.length === 0 ? (
+          {loading ? (
+            <div className="divide-y divide-white/[0.06]">
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="px-4 py-4 flex items-center justify-between animate-pulse"
+                >
+                  <div className="space-y-2">
+                    <div className="h-3.5 w-40 bg-white/[0.06] rounded" />
+                    <div className="h-3 w-28 bg-white/[0.04] rounded" />
+                  </div>
+                  <div className="h-6 w-20 bg-white/[0.04] rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="px-4 py-12 flex flex-col items-center text-center">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-500/10 mb-3">
+                <AlertTriangle size={18} className="text-red-400" />
+              </div>
+              <p className="text-sm font-medium text-slate-300">
+                Something went wrong
+              </p>
+              <p className="text-sm text-slate-500 mt-1 max-w-sm">{error}</p>
+            </div>
+          ) : pageData.length === 0 ? (
             <div className="px-4 py-12 flex flex-col items-center text-center">
               <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/[0.04] mb-3">
                 <Search size={18} className="text-slate-500" />
               </div>
               <p className="text-sm font-medium text-slate-300">
-                No receipts found
+                {receipts.length === 0
+                  ? "No receipts yet"
+                  : "No receipts found"}
               </p>
               <p className="text-sm text-slate-500 mt-1 max-w-sm">
-                Try adjusting your search or filter to find what you're looking
-                for.
+                {receipts.length === 0
+                  ? "Verify a receipt and it will show up here."
+                  : "Try adjusting your search or filter to find what you're looking for."}
               </p>
             </div>
           ) : (
@@ -224,7 +255,7 @@ export default function HistoryPage() {
 
                 <tbody className="divide-y divide-white/[0.06]">
                   {pageData.map((r) => {
-                    const s = STATUS[r.status];
+                    const s = statusStyle(r.status);
                     const Icon = s.icon;
 
                     return (
@@ -233,16 +264,16 @@ export default function HistoryPage() {
                         className="hover:bg-white/[0.015] transition-colors"
                       >
                         <td className="px-4 py-3.5 font-mono text-xs text-slate-300">
-                          {r.txnRef}
+                          {r.reference}
                         </td>
                         <td className="px-4 py-3.5 text-slate-300">
-                          {r.provider}
+                          {providerLabel(r.provider)}
                         </td>
                         <td className="px-4 py-3.5 font-medium text-white">
-                          {r.amount}
+                          {formatAmount(r.amount)}
                         </td>
                         <td className="px-4 py-3.5 text-slate-500 text-xs">
-                          {r.submittedAt}
+                          {relativeTime(r.createdAt)}
                         </td>
 
                         <td className="px-4 py-3.5">
@@ -272,23 +303,23 @@ export default function HistoryPage() {
         </div>
 
         {/* PAGINATION */}
-        {filtered.length > 0 && (
+        {!loading && !error && filtered.length > 0 && (
           <div className="flex justify-between items-center">
             <span className="text-xs text-slate-500">
-              Page {page} of {totalPages}
+              Page {safePage} of {totalPages}
             </span>
 
             <div className="flex gap-1.5">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
+                disabled={safePage === 1}
                 className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
               >
                 <ChevronLeft size={16} />
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
+                disabled={safePage === totalPages}
                 className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
               >
                 <ChevronRight size={16} />
@@ -306,7 +337,7 @@ export default function HistoryPage() {
               <div>
                 <h2 className="text-base font-semibold">Receipt details</h2>
                 <p className="font-mono text-xs text-slate-500 mt-1">
-                  {detail.txnRef}
+                  {detail.reference}
                 </p>
               </div>
               <button
@@ -320,7 +351,7 @@ export default function HistoryPage() {
             {/* status badge */}
             <div className="mt-4">
               {(() => {
-                const s = STATUS[detail.status];
+                const s = statusStyle(detail.status);
                 const Icon = s.icon;
                 return (
                   <span
@@ -339,56 +370,28 @@ export default function HistoryPage() {
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
                   <Wallet size={12} /> Provider
                 </div>
-                <p className="text-sm font-medium">{detail.provider}</p>
+                <p className="text-sm font-medium">
+                  {providerLabel(detail.provider)}
+                </p>
               </div>
 
               <div className="bg-[#0a0c10] border border-white/[0.06] rounded-lg p-3">
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
                   <Hash size={12} /> Amount
                 </div>
-                <p className="text-sm font-medium">{detail.amount}</p>
-              </div>
-
-              <div className="bg-[#0a0c10] border border-white/[0.06] rounded-lg p-3">
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
-                  <Calendar size={12} /> Date
-                </div>
-                <p className="text-sm font-medium">{detail.date}</p>
-              </div>
-
-              <div className="bg-[#0a0c10] border border-white/[0.06] rounded-lg p-3">
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
-                  <Gauge size={12} /> Response time
-                </div>
-                <p className="text-sm font-medium">{detail.responseTime}</p>
+                <p className="text-sm font-medium">
+                  {formatAmount(detail.amount)}
+                </p>
               </div>
 
               <div className="bg-[#0a0c10] border border-white/[0.06] rounded-lg p-3 col-span-2">
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
-                  <Percent size={12} /> Confidence score
+                  <Calendar size={12} /> Date
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-emerald-400"
-                      style={{ width: `${detail.confidence}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-medium">
-                    {detail.confidence}%
-                  </span>
-                </div>
+                <p className="text-sm font-medium">
+                  {formatDate(detail.createdAt)}
+                </p>
               </div>
-            </div>
-
-            {/* notes */}
-            <div className="mt-3 bg-[#0a0c10] border border-white/[0.06] rounded-lg p-3">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
-                <StickyNote size={12} /> Notes
-              </div>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                {detail.notes}
-              </p>
             </div>
 
             <button
