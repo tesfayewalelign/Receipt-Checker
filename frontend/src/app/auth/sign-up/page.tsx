@@ -62,10 +62,6 @@ export default function SignUpPage() {
         callbackURL: "/dashboard",
       },
       {
-        onRequest: () => {
-          console.log("Creating account...");
-        },
-
         onSuccess: () => {
           router.push("/dashboard");
         },

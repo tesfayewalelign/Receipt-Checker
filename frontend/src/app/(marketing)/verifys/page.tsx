@@ -1,16 +1,8 @@
 "use client";
 
 import Link from "next/link";
-
-const providers = [
-  { name: "Commercial Bank of Ethiopia", id: "cbe" },
-  { name: "Telebirr", id: "telebirr" },
-  { name: "CBE Birr", id: "cbe-birr" },
-  { name: "Bank of Abyssinia", id: "boa" },
-  { name: "Awash Bank", id: "awash" },
-  { name: "Dashen Bank", id: "dashen" },
-  { name: "M-Pesa Ethiopia", id: "mpesa" },
-];
+import { PROVIDERS } from "@/lib/providers";
+import ProviderLogo from "@/components/ProviderLogo";
 
 export default function VerifyPage() {
   return (
@@ -24,14 +16,21 @@ export default function VerifyPage() {
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {providers.map((p) => (
+        {PROVIDERS.map((p) => (
           <Link
             key={p.id}
             href={`/verify/${p.id}`}
-            className="bg-white border rounded-xl p-5 hover:border-emerald-400 hover:shadow transition"
+            className="bg-white border rounded-xl p-5 hover:border-emerald-400 hover:shadow transition flex items-center gap-4"
           >
-            <div className="font-semibold text-gray-900">{p.name}</div>
-            <div className="text-sm text-gray-500 mt-1">Click to verify</div>
+            <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+              <ProviderLogo provider={p} size={32} />
+            </div>
+            <div className="min-w-0">
+              <div className="font-semibold text-gray-900 truncate">
+                {p.name}
+              </div>
+              <div className="text-sm text-gray-500 mt-1">Click to verify</div>
+            </div>
           </Link>
         ))}
       </div>

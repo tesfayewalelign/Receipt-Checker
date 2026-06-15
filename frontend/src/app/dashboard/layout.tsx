@@ -189,13 +189,6 @@ export default function DashboardLayout({
             View Site
           </Link>
 
-          <button
-            className="text-slate-400 hover:text-white transition"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5" />
-          </button>
-
           {/* USER MENU */}
           <div className="relative" ref={menuRef}>
             <button

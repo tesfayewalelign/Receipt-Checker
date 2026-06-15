@@ -1,74 +1,8 @@
-import { Smartphone, Building2, Wallet } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import { PROVIDERS } from "@/lib/providers";
+import ProviderLogo from "@/components/ProviderLogo";
 
 export default function SupportedProviders() {
-  const providers = [
-    {
-      name: "Commercial Bank of Ethiopia",
-      abbr: "CBE",
-      category: "Bank",
-      icon: Building2,
-      logo: "/banks/cbe.png",
-      id: "cbe",
-    },
-    {
-      name: "Telebirr",
-      abbr: "Telebirr",
-      category: "Mobile Money",
-      icon: Smartphone,
-      logo: "/banks/TeleBirr Logo.png",
-      id: "telebirr",
-    },
-    {
-      name: "CBE Birr",
-      abbr: "CBE Birr",
-      category: "Mobile Money",
-      icon: Wallet,
-      logo: "/banks/CBE Birr Logo.png",
-      id: "cbe-birr",
-    },
-    {
-      name: "Bank of Abyssinia",
-      abbr: "BoA",
-      category: "Bank",
-      icon: Building2,
-      logo: "/banks/Abyssinia.png",
-      id: "boa",
-    },
-    {
-      name: "Awash Bank",
-      abbr: "Awash",
-      category: "Bank",
-      icon: Building2,
-      logo: "/banks/awash.png",
-      id: "awash",
-    },
-    {
-      name: "Dashen Bank",
-      abbr: "Dashen",
-      category: "Bank",
-      icon: Building2,
-      logo: "/banks/Dashen.png",
-      id: "dashen",
-    },
-    {
-      name: "M-Pesa Ethiopia",
-      abbr: "M-Pesa",
-      category: "Mobile Money",
-      icon: Smartphone,
-      logo: "/banks/MPesa.png",
-      id: "mpesa",
-    },
-    {
-      name: "Other Banks",
-      abbr: "15+",
-      category: "Supported",
-      icon: Building2,
-      id: null,
-    },
-  ];
-
   return (
     <section id="providers" className="py-20 bg-gray-50">
       <div className="max-w-7xl mx-auto px-6">
@@ -87,23 +21,15 @@ export default function SupportedProviders() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {providers.map((provider, index) => {
-            const Icon = provider.icon;
-
-            const content = (
+          {PROVIDERS.map((provider) => (
+            <Link
+              key={provider.id}
+              href={`/verify/${provider.id}`}
+              className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 hover:border-emerald-200 group cursor-pointer hover:-translate-y-1"
+            >
               <div className="flex flex-col items-center text-center gap-3">
                 <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform overflow-hidden">
-                  {provider.logo ? (
-                    <Image
-                      src={provider.logo}
-                      alt={provider.abbr}
-                      width={40}
-                      height={40}
-                      className="object-contain"
-                    />
-                  ) : (
-                    <Icon className="w-7 h-7 text-gray-700" />
-                  )}
+                  <ProviderLogo provider={provider} size={40} />
                 </div>
                 <div>
                   <div className="text-gray-900" style={{ fontWeight: 600 }}>
@@ -115,36 +41,17 @@ export default function SupportedProviders() {
                   </div>
                 </div>
 
-                {provider.id && (
-                  <div className="mt-2">
-                    <span
-                      className="text-xs text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full"
-                      style={{ fontWeight: 600 }}
-                    >
-                      Click to Verify
-                    </span>
-                  </div>
-                )}
+                <div className="mt-2">
+                  <span
+                    className="text-xs text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full"
+                    style={{ fontWeight: 600 }}
+                  >
+                    Click to Verify
+                  </span>
+                </div>
               </div>
-            );
-
-            return provider.id ? (
-              <Link
-                key={index}
-                href={`/verify/${provider.id}`}
-                className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 hover:border-emerald-200 group cursor-pointer hover:-translate-y-1"
-              >
-                {content}
-              </Link>
-            ) : (
-              <div
-                key={index}
-                className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 opacity-75"
-              >
-                {content}
-              </div>
-            );
-          })}
+            </Link>
+          ))}
         </div>
 
         <div className="mt-12 text-center">

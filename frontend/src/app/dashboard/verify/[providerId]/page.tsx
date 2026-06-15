@@ -12,6 +12,8 @@ import {
   X,
 } from "lucide-react";
 import { verifyReceipt } from "@/services/receipt.service";
+import { getProvider } from "@/lib/providers";
+import ProviderLogo from "@/components/ProviderLogo";
 
 function DetailItem({
   label,
@@ -33,85 +35,11 @@ function DetailItem({
   );
 }
 
-const providers = {
-  cbe: {
-    name: "Commercial Bank of Ethiopia",
-    color: "from-[#2E0F4F] to-[#4B1D6B]",
-    referenceLabel: "Reference No",
-    referencePlaceholder: "FT123456789",
-    referenceHint: "Starts with FT....",
-
-    fields: ["reference", "accountSuffix", "image"],
-  },
-
-  telebirr: {
-    name: "Telebirr",
-    color: "from-[#003366] to-[#004C99]",
-    referenceLabel: "Transaction Number",
-    referencePlaceholder: "TBR123456789",
-    referenceHint: "Telebirr transaction number",
-
-    fields: ["reference", "image"],
-  },
-
-  "cbe-birr": {
-    name: "CBE Birr",
-    color: "from-[#2E0F4F] to-[#4B1D6B]",
-    referenceLabel: "Receipt Number",
-    referencePlaceholder: "CBB123456789",
-    referenceHint: "CBE Birr receipt number",
-    fields: ["receiptNumber", "phoneNumber", "image"],
-  },
-
-  mpesa: {
-    name: "M-Pesa Ethiopia",
-    color: "from-[#DC143C] to-[#FF4D6D]",
-    referenceLabel: "Transaction Number",
-    referencePlaceholder: "MPESA123456",
-    referenceHint: "M-Pesa transaction reference",
-
-    fields: ["reference", "image"],
-  },
-
-  boa: {
-    name: "Bank of Abyssinia",
-    color: "from-[#FFD700] to-[#FFC107]",
-
-    referenceLabel: "Reference No",
-    referencePlaceholder: "BOA123456789",
-    referenceHint: "Bank reference number",
-
-    fields: ["reference", "accountSuffix", "image"],
-  },
-
-  awash: {
-    name: "Awash Bank",
-    color: "from-[#0A2463] to-[#1E3A8A]",
-
-    referenceLabel: "Reference No",
-    referencePlaceholder: "UBH123456789",
-    referenceHint: "Awash reference number",
-
-    fields: ["reference", "image"],
-  },
-
-  dashen: {
-    name: "Dashen Bank",
-    color: "from-[#005BAA] to-[#003E7E]",
-
-    referenceLabel: "Reference No",
-    referencePlaceholder: "DSH123456789",
-    referenceHint: "Dashen bank reference number",
-
-    fields: ["reference", "image"],
-  },
-};
-
 export default function DashboardVerifyReceiptPage() {
   const params = useParams();
   const providerId = params.providerId as string;
 
-  const provider = providers[providerId as keyof typeof providers];
+  const provider = getProvider(providerId);
 
   const [formData, setFormData] = useState({
     reference: "",
@@ -210,10 +138,15 @@ export default function DashboardVerifyReceiptPage() {
         </Link>
 
         <div
-          className={`bg-gradient-to-r ${provider.color} text-white p-8 rounded-2xl`}
+          className={`bg-gradient-to-r ${provider.color} text-white p-8 rounded-2xl flex items-center gap-4`}
         >
-          <h1 className="text-2xl font-bold">Verify {provider.name}</h1>
-          <p className="text-white/80">Upload receipt or enter details</p>
+          <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center shrink-0 overflow-hidden">
+            <ProviderLogo provider={provider} size={40} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Verify {provider.name}</h1>
+            <p className="text-white/80">Upload receipt or enter details</p>
+          </div>
         </div>
       </div>
 

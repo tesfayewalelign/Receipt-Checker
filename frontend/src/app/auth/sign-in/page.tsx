@@ -26,10 +26,6 @@ export default function SignInPage() {
         rememberMe,
       },
       {
-        onRequest: () => {
-          console.log("Signing in...");
-        },
-
         onSuccess: () => {
           router.push("/dashboard");
         },
