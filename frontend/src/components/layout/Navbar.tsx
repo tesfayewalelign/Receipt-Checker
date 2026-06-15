@@ -95,40 +95,19 @@ export default function Header() {
 
         {/* Desktop Actions */}
         <div className="hidden items-center gap-4 lg:flex">
-          {isPending ? null : isLoggedIn ? (
-            <>
-              <Link
-                href="/dashboard"
-                className="rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:scale-[1.02] hover:from-emerald-600 hover:to-cyan-600 hover:shadow-xl"
-              >
-                Dashboard
-              </Link>
+          <Link
+            href="/auth/sign-in"
+            className="rounded-xl border border-transparent px-5 py-2.5 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-gray-200 hover:bg-gray-50 hover:text-emerald-600"
+          >
+            Sign In
+          </Link>
 
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="rounded-xl border border-transparent px-5 py-2.5 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-gray-200 hover:bg-gray-50 hover:text-emerald-600"
-              >
-                Sign Out
-              </button>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/auth/sign-in"
-                className="rounded-xl border border-transparent px-5 py-2.5 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-gray-200 hover:bg-gray-50 hover:text-emerald-600"
-              >
-                Sign In
-              </Link>
-
-              <Link
-                href="/auth/sign-up"
-                className="rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:scale-[1.02] hover:from-emerald-600 hover:to-cyan-600 hover:shadow-xl"
-              >
-                Get Started
-              </Link>
-            </>
-          )}
+          <Link
+            href="/auth/sign-up"
+            className="rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:scale-[1.02] hover:from-emerald-600 hover:to-cyan-600 hover:shadow-xl"
+          >
+            Get Started
+          </Link>
         </div>
 
         {/* Mobile Menu Button */}
@@ -174,43 +153,21 @@ export default function Header() {
 
           {/* Mobile Buttons */}
           <div className="mt-6 flex flex-col gap-3">
-            {isPending ? null : isLoggedIn ? (
-              <>
-                <Link
-                  href="/dashboard"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:from-emerald-600 hover:to-cyan-600"
-                >
-                  Dashboard
-                </Link>
+            <Link
+              href="/auth/sign-in"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"
+            >
+              Sign In
+            </Link>
 
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"
-                >
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/auth/sign-in"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"
-                >
-                  Sign In
-                </Link>
-
-                <Link
-                  href="/auth/sign-up"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:from-emerald-600 hover:to-cyan-600"
-                >
-                  Get Started
-                </Link>
-              </>
-            )}
+            <Link
+              href="/auth/sign-up"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:from-emerald-600 hover:to-cyan-600"
+            >
+              Get Started
+            </Link>
           </div>
         </div>
       </div>
