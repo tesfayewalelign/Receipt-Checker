@@ -1,101 +1,138 @@
-import { GitBranch, Globe, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 import Link from "next/link";
+import { FaGithub, FaTelegramPlane } from "react-icons/fa";
+
+const GITHUB_URL = "https://github.com/tesfayewalelign";
+const TELEGRAM_URL = "https://t.me/howa13";
+const EMAIL = "tesfayewalelign2@gmail.com";
 
 export default function Footer() {
-  const links = {
+  const nav = {
     product: [
       { name: "Features", href: "/features" },
+      { name: "Verifications", href: "/#providers" },
       { name: "API Docs", href: "/api-docs" },
-      { name: "Status", href: "#" },
     ],
     company: [
       { name: "About Us", href: "/about" },
-      { name: "Careers", href: "#" },
-      { name: "Blog", href: "#" },
-      { name: "Contact", href: "#" },
-    ],
-    resources: [
-      { name: "Documentation", href: "/api-docs" },
-      { name: "Guides", href: "#" },
-      { name: "Support", href: "#" },
-      { name: "Community", href: "#" },
-    ],
-    legal: [
-      { name: "Privacy Policy", href: "#" },
-      { name: "Terms of Service", href: "#" },
-      { name: "Cookie Policy", href: "#" },
-      { name: "Compliance", href: "#" },
+      { name: "Sign In", href: "/auth/sign-in" },
+      { name: "Get Started", href: "/auth/sign-up" },
     ],
   };
 
+  const socials = [
+    {
+      name: "GitHub",
+      href: GITHUB_URL,
+      icon: <FaGithub className="h-5 w-5" />,
+      external: true,
+    },
+    {
+      name: "Telegram",
+      href: TELEGRAM_URL,
+      icon: <FaTelegramPlane className="h-5 w-5" />,
+      external: true,
+    },
+    {
+      name: "Email",
+      href: `mailto:${EMAIL}`,
+      icon: <Mail className="h-5 w-5" />,
+      external: false,
+    },
+  ];
+
   return (
-    <footer className="bg-gray-900 text-gray-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        {/* TOP GRID */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-10 sm:gap-12 mb-12">
+    <footer className="border-t border-gray-800 bg-gray-950 text-gray-300">
+      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
           {/* BRAND */}
-          <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl" />
-              <span className="text-white font-bold text-lg sm:text-xl">
-                ReceiptCheck
+          <div className="lg:col-span-5">
+            <Link href="/" className="inline-flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 shadow-lg shadow-emerald-500/20">
+                <span className="text-lg font-bold text-white">R</span>
+              </div>
+              <span className="text-xl font-bold tracking-tight text-white">
+                EthioVerify
               </span>
             </Link>
 
-            <p className="text-gray-400 text-sm sm:text-base leading-relaxed mb-6 max-w-sm">
-              The most trusted payment receipt verification platform for
-              Ethiopian businesses and developers.
+            <p className="mt-5 max-w-sm text-sm leading-relaxed text-gray-400">
+              The trusted payment receipt verification platform for Ethiopian
+              businesses and developers — fast, reliable, and built for scale.
             </p>
 
-            {/* SOCIAL */}
-            <div className="flex items-center gap-3 sm:gap-4">
-              {[GitBranch, Globe, Mail].map((Icon, i) => (
+            <Link
+              href="/auth/sign-up"
+              className="mt-7 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:from-emerald-600 hover:to-cyan-600 hover:shadow-xl"
+            >
+              Get Started Free
+            </Link>
+          </div>
+
+          {/* PRODUCT */}
+          <div className="lg:col-span-2">
+            <h4 className="text-sm font-semibold text-white">Product</h4>
+            <ul className="mt-4 space-y-3">
+              {nav.product.map((link) => (
+                <li key={link.name}>
+                  <Link
+                    href={link.href}
+                    className="text-sm text-gray-400 transition-colors hover:text-emerald-400"
+                  >
+                    {link.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* COMPANY */}
+          <div className="lg:col-span-2">
+            <h4 className="text-sm font-semibold text-white">Company</h4>
+            <ul className="mt-4 space-y-3">
+              {nav.company.map((link) => (
+                <li key={link.name}>
+                  <Link
+                    href={link.href}
+                    className="text-sm text-gray-400 transition-colors hover:text-emerald-400"
+                  >
+                    {link.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* CONNECT */}
+          <div className="lg:col-span-3">
+            <h4 className="text-sm font-semibold text-white">Connect</h4>
+            <p className="mt-4 text-sm text-gray-400">
+              Questions or feedback? Reach out anytime.
+            </p>
+            <div className="mt-5 flex items-center gap-3">
+              {socials.map((s) => (
                 <a
-                  key={i}
-                  href="#"
-                  className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-800 hover:bg-emerald-500 rounded-lg flex items-center justify-center transition-colors"
+                  key={s.name}
+                  href={s.href}
+                  aria-label={s.name}
+                  title={s.name}
+                  {...(s.external
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : {})}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-900 text-gray-400 ring-1 ring-gray-800 transition-all duration-200 hover:bg-emerald-500 hover:text-white hover:ring-emerald-500"
                 >
-                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  {s.icon}
                 </a>
               ))}
             </div>
           </div>
-
-          {/* LINK COLUMNS */}
-          {[
-            { title: "Product", items: links.product },
-            { title: "Company", items: links.company },
-            { title: "Resources", items: links.resources },
-            { title: "Legal", items: links.legal },
-          ].map((section, idx) => (
-            <div key={idx}>
-              <h4 className="text-white font-semibold mb-4 text-sm sm:text-base">
-                {section.title}
-              </h4>
-
-              <ul className="space-y-2 sm:space-y-3">
-                {section.items.map((link, i) => (
-                  <li key={i}>
-                    <Link
-                      href={link.href}
-                      className="text-gray-400 text-sm sm:text-base hover:text-emerald-400 transition-colors"
-                    >
-                      {link.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
         </div>
 
         {/* BOTTOM BAR */}
-        <div className="border-t border-gray-800 pt-6 sm:pt-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
-            <p className="text-gray-400 text-xs sm:text-sm">
-              © 2026 ReceiptCheck. All rights reserved.
-            </p>
-          </div>
+        <div className="mt-14 flex flex-col items-center justify-between gap-3 border-t border-gray-800 pt-8 sm:flex-row">
+          <p className="text-xs text-gray-500">
+            © 2026 EthioVerify. All rights reserved.
+          </p>
         </div>
       </div>
     </footer>

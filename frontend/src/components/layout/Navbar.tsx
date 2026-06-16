@@ -63,7 +63,7 @@ export default function Header() {
 
           <div className="flex flex-col">
             <span className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl">
-              ReceiptCheck
+              EthioVerify
             </span>
 
             <span className="hidden text-xs text-gray-500 sm:block">

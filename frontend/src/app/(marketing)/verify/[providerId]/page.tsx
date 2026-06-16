@@ -56,6 +56,10 @@ export default function VerifyReceiptPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
 
+  // Two ways to verify: type the transaction details, or upload a receipt image.
+  // Only one is active at a time so users aren't asked for all of it at once.
+  const [method, setMethod] = useState<"details" | "upload">("details");
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -85,13 +89,17 @@ export default function VerifyReceiptPage() {
     setVerificationResult(null);
 
     try {
-      const result = await verifyReceipt({
-        bank: providerId,
-        reference: formData.reference,
-        accountSuffix: formData.accountSuffix,
-        phoneNumber: formData.phoneNumber,
-        receiptNumber: formData.receiptNumber,
-      });
+      const result = await verifyReceipt(
+        method === "upload"
+          ? { bank: providerId, image: uploadedImage }
+          : {
+              bank: providerId,
+              reference: formData.reference,
+              accountSuffix: formData.accountSuffix,
+              phoneNumber: formData.phoneNumber,
+              receiptNumber: formData.receiptNumber,
+            },
+      );
 
       setVerificationResult(result);
     } catch (error) {
@@ -157,93 +165,127 @@ export default function VerifyReceiptPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* FORM */}
           <div className="lg:col-span-2 bg-white p-8 rounded-2xl shadow">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* REFERENCE */}
-              <div>
-                <label className="font-semibold text-sm text-gray-700">
-                  {provider.referenceLabel} *
-                </label>
+            {/* METHOD TABS — pick one way to verify, not all at once */}
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setMethod("details")}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${
+                  method === "details"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Enter Details
+              </button>
 
-                <input
-                  name="reference"
-                  value={formData.reference}
-                  onChange={handleInputChange}
-                  placeholder={provider.referencePlaceholder}
-                  className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
-                  required
-                />
+              <button
+                type="button"
+                onClick={() => setMethod("upload")}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${
+                  method === "upload"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Upload Receipt
+              </button>
+            </div>
 
-                <p className="text-xs text-gray-500 mt-1">
-                  {provider.referenceHint}
-                </p>
-              </div>
-              {/* RECEIPT NUMBER */}
+            <p className="text-xs text-gray-500 mt-2">
+              {method === "details"
+                ? "Type the transaction details from your receipt."
+                : "Upload a photo of your receipt — we'll read the details for you."}
+            </p>
 
-              {/* PHONE */}
-              {provider.fields.includes("phoneNumber") && (
-                <div>
-                  <label className="font-semibold text-sm text-gray-700">
-                    Phone Number *
-                  </label>
+            <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+              {method === "details" && (
+                <>
+                  {/* REFERENCE */}
+                  <div>
+                    <label className="font-semibold text-sm text-gray-700">
+                      {provider.referenceLabel} *
+                    </label>
 
-                  <input
-                    name="phoneNumber"
-                    value={formData.phoneNumber}
-                    onChange={handleInputChange}
-                    placeholder="09XXXXXXXX"
-                    className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
-                    required
-                  />
-                </div>
-              )}
+                    <input
+                      name="reference"
+                      value={formData.reference}
+                      onChange={handleInputChange}
+                      placeholder={provider.referencePlaceholder}
+                      className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
+                      required={method === "details"}
+                    />
 
-              {/* ACCOUNT SUFFIX */}
-              {provider.fields.includes("accountSuffix") && (
-                <div>
-                  <label className="font-semibold text-sm text-gray-700">
-                    Account Suffix
-                  </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {provider.referenceHint}
+                    </p>
+                  </div>
 
-                  <input
-                    name="accountSuffix"
-                    value={formData.accountSuffix}
-                    onChange={handleInputChange}
-                    placeholder="Last 8 digits"
-                    className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
-                  />
-                </div>
+                  {/* PHONE */}
+                  {provider.fields.includes("phoneNumber") && (
+                    <div>
+                      <label className="font-semibold text-sm text-gray-700">
+                        Phone Number *
+                      </label>
+
+                      <input
+                        name="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={handleInputChange}
+                        placeholder="09XXXXXXXX"
+                        className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
+                        required={method === "details"}
+                      />
+                    </div>
+                  )}
+
+                  {/* ACCOUNT SUFFIX */}
+                  {provider.fields.includes("accountSuffix") && (
+                    <div>
+                      <label className="font-semibold text-sm text-gray-700">
+                        Account Suffix
+                      </label>
+
+                      <input
+                        name="accountSuffix"
+                        value={formData.accountSuffix}
+                        onChange={handleInputChange}
+                        placeholder="Last 8 digits"
+                        className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               {/* IMAGE */}
-              <div>
-                <label className="font-semibold text-sm text-gray-700">
-                  Upload Receipt
-                </label>
-
-                {!imagePreview ? (
-                  <label className="block border-2 border-dashed p-6 text-center mt-2 rounded-xl cursor-pointer">
-                    <input type="file" hidden onChange={handleImageUpload} />
-                    <Upload className="mx-auto mb-2" />
-                    Click to upload
-                  </label>
-                ) : (
-                  <div className="mt-2 relative">
-                    <img src={imagePreview} className="rounded-xl" />
-                    <button
-                      type="button"
-                      onClick={removeImage}
-                      className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded"
-                    >
-                      <X />
-                    </button>
-                  </div>
-                )}
-              </div>
+              {method === "upload" && (
+                <div>
+                  {!imagePreview ? (
+                    <label className="block border-2 border-dashed p-6 text-center rounded-xl cursor-pointer">
+                      <input type="file" hidden onChange={handleImageUpload} />
+                      <Upload className="mx-auto mb-2" />
+                      Click to upload
+                    </label>
+                  ) : (
+                    <div className="relative">
+                      <img src={imagePreview} className="rounded-xl" />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded"
+                      >
+                        <X />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* SUBMIT */}
               <button
-                disabled={isVerifying}
-                className={`w-full py-4 rounded-xl text-white font-semibold bg-gradient-to-r ${provider.color}`}
+                disabled={isVerifying || (method === "upload" && !uploadedImage)}
+                className={`w-full py-4 rounded-xl text-white font-semibold bg-gradient-to-r ${provider.color} disabled:opacity-60`}
               >
                 {isVerifying ? "Verifying..." : "Verify Receipt"}
               </button>
@@ -399,7 +441,7 @@ export default function VerifyReceiptPage() {
                   1
                 </div>
                 <p className="text-sm text-gray-600">
-                  Enter transaction reference and details
+                  Choose a method: enter the details or upload your receipt
                 </p>
               </div>
 
@@ -411,7 +453,7 @@ export default function VerifyReceiptPage() {
                   2
                 </div>
                 <p className="text-sm text-gray-600">
-                  Optionally upload receipt image for OCR
+                  Type the reference (and account) or attach the receipt image
                 </p>
               </div>
 
