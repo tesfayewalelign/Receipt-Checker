@@ -51,8 +51,11 @@ function parseCBEDate(dateText: string): Date {
 async function extractReferenceFromUploadedPdf(
   buffer: Buffer,
 ): Promise<string> {
+  console.log("[CBE/pdf] buffer received:", !!buffer, "bytes:", buffer?.length ?? 0);
+
   const uint8Array = new Uint8Array(buffer);
   const pdf = await pdfjs.getDocument({ data: uint8Array }).promise;
+  console.log("[CBE/pdf] pdfjs loaded, numPages:", pdf.numPages);
 
   let text = "";
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -61,11 +64,27 @@ async function extractReferenceFromUploadedPdf(
     text += content.items.map((item: any) => item.str).join(" ") + " ";
   }
 
-  const reference = text
-    .replace(/\s+/g, " ")
-    .match(/Reference\s+No\.?\s*\(VAT\s+Invoice\s+No\)\s+([A-Z0-9]+)/i)?.[1];
+  const normalized = text.replace(/\s+/g, " ").trim();
+  console.log("[CBE/pdf] extracted text length:", normalized.length);
+  console.log("[CBE/pdf] text preview:", normalized.slice(0, 300));
 
-  if (!reference) throw new Error("Reference not found in uploaded PDF");
+  // pdfjs returns no text for scanned/image-only PDFs — distinguish that from
+  // a PDF whose text simply doesn't match our reference pattern.
+  if (normalized.length === 0) {
+    throw new Error(
+      "PDF contains no extractable text (likely a scanned image) — upload the original CBE PDF or a clear photo instead",
+    );
+  }
+
+  const reference = normalized.match(
+    /Reference\s+No\.?\s*\(VAT\s+Invoice\s+No\)\s+([A-Z0-9]+)/i,
+  )?.[1];
+
+  console.log("[CBE/pdf] extracted reference:", reference ?? "(none — regex did not match)");
+
+  if (!reference) {
+    throw new Error("No receipt reference found in uploaded PDF");
+  }
   return reference;
 }
 
@@ -107,8 +126,15 @@ export async function verifyCBE(payload: {
   fileType?: "pdf" | "image";
 }): Promise<VerifyResult> {
   try {
-    if (!payload.accountSuffix) {
-      return { success: false, error: "accountSuffix is required" };
+    // When the user uploads the original CBE PDF it already contains every
+    // field we need. Parse it directly so the upload succeeds WITHOUT asking
+    // for accountSuffix/reference — those are only needed to re-fetch the
+    // official PDF from the portal, which an uploaded PDF makes unnecessary.
+    if (payload.fileBuffer && (payload.fileType ?? "pdf") === "pdf") {
+      const parsed = await parseCBEReceipt(payload.fileBuffer);
+      if (parsed.success) return parsed;
+      // Not the official CBE PDF (or unparseable) — fall through to the
+      // reference-extraction + portal-fetch path below.
     }
 
     let reference = payload.reference;
@@ -123,6 +149,11 @@ export async function verifyCBE(payload: {
 
     if (!reference) {
       return { success: false, error: "Reference not found" };
+    }
+
+    // From here we must call the CBE portal, which requires accountSuffix.
+    if (!payload.accountSuffix) {
+      return { success: false, error: "accountSuffix is required" };
     }
 
     const officialPdf = await fetchCBEReceiptPdfWithRetry(

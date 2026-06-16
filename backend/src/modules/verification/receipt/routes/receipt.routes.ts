@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ReceiptController } from "../controllers/receipt.controller";
-import { upload } from "../../../../middlewares/upload.middleware";
+import { uploadReceiptImage } from "../../../../middlewares/upload.middleware";
 
 const router = Router();
 
@@ -9,6 +9,8 @@ const router = Router();
 //   • multipart/form-data with an "image" file (PDF / photo / screenshot) —
 //     parsed by multer. The field name MUST match the frontend, which appends
 //     the file as "image" (see frontend/src/services/receipt.service.ts).
-router.post("/verify", upload.single("image"), ReceiptController.verify);
+// uploadReceiptImage wraps multer so upload errors return a clean 400 instead
+// of an opaque 500.
+router.post("/verify", uploadReceiptImage, ReceiptController.verify);
 
 export default router;

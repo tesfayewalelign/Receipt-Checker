@@ -9,6 +9,16 @@ export class ReceiptController {
     try {
       const { bank } = req.body;
 
+      const incomingFile = (req as MulterRequest).file;
+      console.log("========== RECEIPT VERIFY REQUEST ==========");
+      console.log("[ReceiptController] bank:", bank);
+      console.log("[ReceiptController] file received:", !!incomingFile);
+      console.log("[ReceiptController] file size (bytes):", incomingFile?.size ?? 0);
+      console.log("[ReceiptController] file mimetype:", incomingFile?.mimetype ?? "(none)");
+      console.log("[ReceiptController] typed reference:", req.body.reference ?? "(none)");
+      console.log("[ReceiptController] accountSuffix:", req.body.accountSuffix ?? "(none)");
+      console.log("============================================");
+
       if (!bank) {
         return res.status(400).json({
           success: false,

@@ -9,7 +9,11 @@ export interface CBEVerifyPayload {
 
 export class CBEVerificationService {
   static async verify(payload: CBEVerifyPayload): Promise<VerifyResult> {
-    if (!payload.accountSuffix) {
+    // accountSuffix is only needed to re-fetch the official PDF from the CBE
+    // portal when the user TYPED a reference. An uploaded receipt already
+    // contains every field, so don't demand accountSuffix for file uploads —
+    // the verifier parses the uploaded PDF directly.
+    if (!payload.fileBuffer && !payload.accountSuffix) {
       return { success: false, error: "Account suffix is required" };
     }
 

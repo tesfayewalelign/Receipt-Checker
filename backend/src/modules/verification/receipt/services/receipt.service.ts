@@ -21,7 +21,13 @@ export class ReceiptService {
         break;
 
       case "cbe-birr":
-        rawResult = await CBEBirrService.verify(payload);
+        // The verify form labels this field "Receipt Number" and the provider
+        // config names it `receiptNumber`, but the verifier reads `reference`.
+        // Accept either so a typed receipt number isn't silently dropped.
+        rawResult = await CBEBirrService.verify({
+          ...payload,
+          reference: payload.reference || payload.receiptNumber,
+        });
 
         break;
 
@@ -54,13 +60,32 @@ export class ReceiptService {
         throw new Error("Unsupported provider");
     }
 
+    console.log("========== RAW VERIFIER RESULT ==========");
+    console.log("[ReceiptService] bank:", bank);
+    console.log("[ReceiptService] success:", rawResult?.success);
+    console.log("[ReceiptService] error:", rawResult?.error ?? "(none)");
+    console.log("[ReceiptService] has data:", !!(rawResult as any)?.data);
+    console.log("=========================================");
+
+    // When the verifier failed, do NOT normalize (normalize maps over a
+    // missing rawResult.data, producing an all-undefined object that
+    // JSON.stringify collapses to `{}` — the mysterious `{ success:false,
+    // data:{} }`). Instead surface the real reason the verifier reported.
+    if (!rawResult?.success) {
+      return {
+        success: false,
+        message: rawResult?.error || "Verification failed",
+        data: null,
+      };
+    }
+
     const normalized = normalizeReceipt(bank, rawResult);
     console.log("========== NORMALIZED RESULT ==========");
     console.log(JSON.stringify(normalized, null, 2));
     console.log("=======================================");
 
     return {
-      success: rawResult.success,
+      success: true,
       data: normalized,
     };
   }
@@ -79,11 +104,14 @@ export const saveReceiptIfLoggedIn = async (
     return;
   }
 
+  // result.data is null on every failed verification (see ReceiptService.verify),
+  // so read every field through optional chaining + nullish fallback. Never touch
+  // result.data.* directly — that is what threw "Cannot read properties of null".
   const receipt = await prisma.receiptLog.create({
     data: {
       userId: session.user.id,
       reference: result.data?.reference ?? null,
-      amount: result.data.amount,
+      amount: result.data?.amount ?? null,
       status: result.success ? "verified" : "failed",
       provider: bank,
     },
