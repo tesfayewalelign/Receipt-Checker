@@ -6,10 +6,8 @@ import { useState } from "react";
 import { useEffect } from "react";
 import {
   Upload,
-  FileText,
   AlertCircle,
   CheckCircle,
-  Loader,
   ArrowLeft,
   Copy,
   X,
@@ -106,15 +104,10 @@ export default function VerifyReceiptPage() {
       const result = await verifyReceipt(
         method === "upload"
           ? {
+              // Upload is just the receipt — the backend reads every detail
+              // (reference, account, phone, amount) from the file itself.
               bank: providerId,
               image: uploadedImage,
-              // The reference is normally read from the uploaded file; send the
-              // typed one as a fallback for when OCR can't read it. These others
-              // can't come from the file at all — CBE Birr needs the payer phone
-              // to fetch the receipt, CBE/BoA need the account suffix.
-              reference: formData.reference,
-              phoneNumber: formData.phoneNumber,
-              accountSuffix: formData.accountSuffix,
             }
           : {
               bank: providerId,
@@ -345,79 +338,10 @@ export default function VerifyReceiptPage() {
                 </>
               )}
 
-              {/* UPLOAD — image + the fields the file alone can't supply */}
+              {/* UPLOAD — just the receipt. The backend reads the details from
+                  the file, so this tab asks for nothing else. */}
               {method === "upload" && (
                 <>
-                  {/* REFERENCE — optional on upload. We read it from the file
-                      automatically; this is a fallback for when the photo is
-                      too blurry to OCR. */}
-                  <div>
-                    <label className="font-semibold text-sm text-gray-700">
-                      {provider.referenceLabel}{" "}
-                      <span className="text-gray-400 font-normal">
-                        (optional)
-                      </span>
-                    </label>
-
-                    <input
-                      name="reference"
-                      value={formData.reference}
-                      onChange={handleInputChange}
-                      placeholder={provider.referencePlaceholder}
-                      className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
-                    />
-
-                    <p className="text-xs text-gray-500 mt-1">
-                      Only needed if we can&apos;t read it from your receipt.
-                    </p>
-                  </div>
-
-                  {/* PHONE (CBE Birr) — required even on upload: the bank
-                      portal can only return the receipt given the phone. */}
-                  {provider.fields.includes("phoneNumber") && (
-                    <div>
-                      <label className="font-semibold text-sm text-gray-700">
-                        Phone Number *
-                      </label>
-
-                      <input
-                        name="phoneNumber"
-                        value={formData.phoneNumber}
-                        onChange={handleInputChange}
-                        placeholder="09XXXXXXXX"
-                        className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
-                        required
-                      />
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        Required — the phone used to make the payment.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* ACCOUNT SUFFIX (CBE / BoA) — only needed when the upload
-                      isn't the original bank PDF (e.g. a photo/screenshot). */}
-                  {provider.fields.includes("accountSuffix") && (
-                    <div>
-                      <label className="font-semibold text-sm text-gray-700">
-                        Account Suffix
-                      </label>
-
-                      <input
-                        name="accountSuffix"
-                        value={formData.accountSuffix}
-                        onChange={handleInputChange}
-                        placeholder="Last 8 digits"
-                        className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
-                      />
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        Optional for the original bank PDF; required for a photo
-                        or screenshot.
-                      </p>
-                    </div>
-                  )}
-
                   <div>
                     {!imagePreview ? (
                       <label className="block border-2 border-dashed p-6 text-center rounded-xl cursor-pointer">
