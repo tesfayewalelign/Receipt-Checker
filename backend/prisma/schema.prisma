@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
- 
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -117,7 +117,7 @@ model UsageLog {
 model ReceiptLog {
   id        Int      @id @default(autoincrement())
   userId    String
-  reference String
+  reference String?
   amount    Float?
   status    String
   provider  String // mpesa, cbe, etc

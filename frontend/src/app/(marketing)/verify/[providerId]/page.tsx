@@ -56,6 +56,20 @@ export default function VerifyReceiptPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
 
+  // Popup shown after a verification attempt so the user gets immediate,
+  // unmissable feedback (the result card lower on the page is easy to miss).
+  const [popup, setPopup] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  // Auto-dismiss the popup after a few seconds; it can also be closed manually.
+  useEffect(() => {
+    if (!popup) return;
+    const timer = setTimeout(() => setPopup(null), 5000);
+    return () => clearTimeout(timer);
+  }, [popup]);
+
   // Two ways to verify: type the transaction details, or upload a receipt image.
   // Only one is active at a time so users aren't asked for all of it at once.
   const [method, setMethod] = useState<"details" | "upload">("details");
@@ -102,12 +116,30 @@ export default function VerifyReceiptPage() {
       );
 
       setVerificationResult(result);
+
+      setPopup(
+        result?.success
+          ? {
+              type: "success",
+              message: "Receipt verified successfully!",
+            }
+          : {
+              type: "error",
+              message:
+                result?.error || "We couldn't verify this receipt.",
+            },
+      );
     } catch (error) {
       console.error(error);
 
       setVerificationResult({
-        verified: false,
+        success: false,
         message: "Verification failed",
+      });
+
+      setPopup({
+        type: "error",
+        message: "Verification failed. Please try again.",
       });
     } finally {
       setIsVerifying(false);
@@ -138,6 +170,49 @@ export default function VerifyReceiptPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
+      {/* POPUP — immediate feedback after a verification attempt */}
+      {popup && (
+        <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-2">
+          <div
+            className={`flex items-start gap-3 max-w-sm rounded-2xl shadow-xl border p-4 ${
+              popup.type === "success"
+                ? "bg-white border-green-200"
+                : "bg-white border-red-200"
+            }`}
+          >
+            {popup.type === "success" ? (
+              <CheckCircle className="w-6 h-6 text-green-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-6 h-6 text-red-600 shrink-0" />
+            )}
+
+            <div className="flex-1">
+              <p
+                className={`font-semibold ${
+                  popup.type === "success"
+                    ? "text-green-700"
+                    : "text-red-700"
+                }`}
+              >
+                {popup.type === "success"
+                  ? "Verification Successful"
+                  : "Verification Failed"}
+              </p>
+              <p className="text-sm text-gray-600 mt-0.5">{popup.message}</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPopup(null)}
+              className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto px-6 py-12">
         {/* HEADER */}
         <div className="mb-8">

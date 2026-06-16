@@ -82,7 +82,7 @@ export const saveReceiptIfLoggedIn = async (
   const receipt = await prisma.receiptLog.create({
     data: {
       userId: session.user.id,
-      reference: result.data.reference,
+      reference: result.data?.reference ?? null,
       amount: result.data.amount,
       status: result.success ? "verified" : "failed",
       provider: bank,
