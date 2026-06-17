@@ -4,7 +4,12 @@
 //   - backend/src/modules/api-keys/apiKey.middleware.ts (auth errors)
 //   - backend/src/app.ts (route mounts)
 
-export const API_BASE_URL = "http://localhost:5000";
+import { API_URL } from "@/lib/config";
+
+// Base URL shown in the docs and code samples. Comes from the shared config so
+// that after deploy (with NEXT_PUBLIC_API_URL set) the docs and curl/JS samples
+// show the real production host instead of a hard-coded localhost.
+export const API_BASE_URL = API_URL;
 
 export const VERIFY_PATH = "/api/public/receipt/verify";
 

@@ -175,6 +175,7 @@ export async function verifyMPesa(input: {
   reference?: string;
   fileBuffer?: Buffer;
   filePath?: string;
+  fileType?: "pdf" | "image";
 }): Promise<VerifyResult> {
   try {
     let reference = input.reference;
@@ -184,7 +185,13 @@ export async function verifyMPesa(input: {
       let text = "";
 
       if (input.fileBuffer) {
-        text = await extractTextFromPdfBuffer(input.fileBuffer);
+        // Honour the uploaded file's type. An uploaded photo/screenshot must be
+        // OCR'd; feeding image bytes to the PDF text extractor throws, which is
+        // why every M-Pesa image upload reported "reference not found".
+        text =
+          input.fileType === "image"
+            ? (await Tesseract.recognize(input.fileBuffer, "eng+amh")).data.text
+            : await extractTextFromPdfBuffer(input.fileBuffer);
       } else if (input.filePath) {
         const ext = path.extname(input.filePath).toLowerCase();
         text =

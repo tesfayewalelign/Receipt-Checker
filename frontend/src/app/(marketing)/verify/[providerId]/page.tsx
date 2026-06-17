@@ -104,10 +104,15 @@ export default function VerifyReceiptPage() {
       const result = await verifyReceipt(
         method === "upload"
           ? {
-              // Upload is just the receipt — the backend reads every detail
-              // (reference, account, phone, amount) from the file itself.
+              // The backend reads the reference from the uploaded file, but a
+              // few providers still need one extra detail to fetch the official
+              // receipt from their portal: CBE-Birr needs the phone number and
+              // BOA needs the account suffix. Send whatever the user filled —
+              // empty values are dropped before the request is built.
               bank: providerId,
               image: uploadedImage,
+              phoneNumber: formData.phoneNumber,
+              accountSuffix: formData.accountSuffix,
             }
           : {
               bank: providerId,
@@ -194,9 +199,7 @@ export default function VerifyReceiptPage() {
             <div className="flex-1">
               <p
                 className={`font-semibold ${
-                  popup.type === "success"
-                    ? "text-green-700"
-                    : "text-red-700"
+                  popup.type === "success" ? "text-green-700" : "text-red-700"
                 }`}
               >
                 {popup.type === "success"
@@ -319,7 +322,7 @@ export default function VerifyReceiptPage() {
                     </div>
                   )}
 
-                  {/* ACCOUNT SUFFIX */}
+                  {/* ACCOUNT SUFFIX — digit count differs per bank (CBE 8, BoA 5) */}
                   {provider.fields.includes("accountSuffix") && (
                     <div>
                       <label className="font-semibold text-sm text-gray-700">
@@ -330,9 +333,16 @@ export default function VerifyReceiptPage() {
                         name="accountSuffix"
                         value={formData.accountSuffix}
                         onChange={handleInputChange}
-                        placeholder="Last 8 digits"
+                        inputMode="numeric"
+                        maxLength={provider.accountSuffixLength}
+                        placeholder={`Last ${provider.accountSuffixLength ?? 8} digits`}
                         className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
                       />
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        Last {provider.accountSuffixLength ?? 8} digits of the
+                        account number.
+                      </p>
                     </div>
                   )}
                 </>
@@ -342,6 +352,48 @@ export default function VerifyReceiptPage() {
                   the file, so this tab asks for nothing else. */}
               {method === "upload" && (
                 <>
+                  {/* Providers that must call their portal need one extra detail
+                      that the receipt file can't supply on its own. */}
+                  {provider.fields.includes("phoneNumber") && (
+                    <div>
+                      <label className="font-semibold text-sm text-gray-700">
+                        Phone Number *
+                      </label>
+
+                      <input
+                        name="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={handleInputChange}
+                        placeholder="09XXXXXXXX"
+                        className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
+                        required={method === "upload"}
+                      />
+                    </div>
+                  )}
+
+                  {provider.fields.includes("accountSuffix") && (
+                    <div>
+                      <label className="font-semibold text-sm text-gray-700">
+                        Account Suffix
+                      </label>
+
+                      <input
+                        name="accountSuffix"
+                        value={formData.accountSuffix}
+                        onChange={handleInputChange}
+                        inputMode="numeric"
+                        maxLength={provider.accountSuffixLength}
+                        placeholder={`Last ${provider.accountSuffixLength ?? 8} digits`}
+                        className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
+                      />
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        Last {provider.accountSuffixLength ?? 8} digits of the
+                        account number.
+                      </p>
+                    </div>
+                  )}
+
                   <div>
                     {!imagePreview ? (
                       <label className="block border-2 border-dashed p-6 text-center rounded-xl cursor-pointer">
@@ -355,7 +407,15 @@ export default function VerifyReceiptPage() {
                       </label>
                     ) : (
                       <div className="relative">
-                        <img src={imagePreview} className="rounded-xl" />
+                        {/* Transient data-URL preview of the user's upload — not
+                            a remote asset next/image can optimize, so a plain
+                            <img> is the right tool here. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imagePreview}
+                          alt="Receipt preview"
+                          className="rounded-xl"
+                        />
                         <button
                           type="button"
                           onClick={removeImage}
@@ -371,7 +431,9 @@ export default function VerifyReceiptPage() {
 
               {/* SUBMIT */}
               <button
-                disabled={isVerifying || (method === "upload" && !uploadedImage)}
+                disabled={
+                  isVerifying || (method === "upload" && !uploadedImage)
+                }
                 className={`w-full py-4 rounded-xl text-white font-semibold bg-gradient-to-r ${provider.color} disabled:opacity-60`}
               >
                 {isVerifying ? "Verifying..." : "Verify Receipt"}

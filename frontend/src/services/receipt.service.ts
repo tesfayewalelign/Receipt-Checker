@@ -1,6 +1,5 @@
 import axios from "axios";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { API_URL } from "@/lib/config";
 
 export interface VerifyReceiptPayload {
   bank: string;

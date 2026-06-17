@@ -39,6 +39,7 @@ export const verifyReceipt = async (req: Request, res: Response) => {
       case "cbe":
         result = await verifyCBE({
           reference,
+          accountSuffix,
           fileBuffer,
           fileType,
         });

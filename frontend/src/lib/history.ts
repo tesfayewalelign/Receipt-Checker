@@ -1,7 +1,7 @@
 // Shared API + formatting helpers for receipt history / dashboard overview.
 // Backed by the ReceiptLog table (GET /api/history, GET /api/dashboard/overview).
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+import { API_URL } from "./config";
 
 export interface ReceiptLog {
   id: number;

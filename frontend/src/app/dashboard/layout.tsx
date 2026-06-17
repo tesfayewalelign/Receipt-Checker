@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Key,
   History,
-  BarChart3,
   Settings,
   LogOut,
   Menu,
@@ -26,7 +25,6 @@ const navItems = [
   { to: "/dashboard/verify", label: "Verify Receipt", icon: ShieldCheck },
   { to: "/dashboard/api-keys", label: "API Keys", icon: Key },
   { to: "/dashboard/history", label: "Receipt History", icon: History },
-  { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 

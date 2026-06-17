@@ -29,6 +29,13 @@ export interface Provider {
   referenceHint: string;
   /** Which inputs the verify form should render. */
   fields: string[];
+  /**
+   * How many trailing digits of the account number the "Account Suffix" field
+   * expects. Differs per bank (CBE wants 8, BoA wants 5), so the verify form
+   * reads it from here instead of hard-coding "Last 8 digits" everywhere.
+   * Only meaningful when `fields` includes "accountSuffix".
+   */
+  accountSuffixLength?: number;
 }
 
 export const PROVIDERS: Provider[] = [
@@ -43,6 +50,7 @@ export const PROVIDERS: Provider[] = [
     referencePlaceholder: "FT123456789",
     referenceHint: "Starts with FT....",
     fields: ["reference", "accountSuffix", "image"],
+    accountSuffixLength: 8,
   },
   {
     id: "telebirr",
@@ -79,6 +87,7 @@ export const PROVIDERS: Provider[] = [
     referencePlaceholder: "BOA123456789",
     referenceHint: "Bank reference number",
     fields: ["reference", "accountSuffix", "image"],
+    accountSuffixLength: 5,
   },
   {
     id: "awash",

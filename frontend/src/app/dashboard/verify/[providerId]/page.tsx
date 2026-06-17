@@ -193,9 +193,7 @@ export default function DashboardVerifyReceiptPage() {
             <div className="flex-1">
               <p
                 className={`font-semibold ${
-                  popup.type === "success"
-                    ? "text-green-700"
-                    : "text-red-700"
+                  popup.type === "success" ? "text-green-700" : "text-red-700"
                 }`}
               >
                 {popup.type === "success"
@@ -317,7 +315,7 @@ export default function DashboardVerifyReceiptPage() {
                   </div>
                 )}
 
-                {/* ACCOUNT SUFFIX */}
+                {/* ACCOUNT SUFFIX — digit count differs per bank (CBE 8, BoA 5) */}
                 {provider.fields.includes("accountSuffix") && (
                   <div>
                     <label className="font-semibold text-sm text-gray-700">
@@ -328,9 +326,16 @@ export default function DashboardVerifyReceiptPage() {
                       name="accountSuffix"
                       value={formData.accountSuffix}
                       onChange={handleInputChange}
-                      placeholder="Last 8 digits"
+                      inputMode="numeric"
+                      maxLength={provider.accountSuffixLength}
+                      placeholder={`Last ${provider.accountSuffixLength ?? 8} digits`}
                       className="w-full mt-2 px-4 py-3 border rounded-xl text-gray-900"
                     />
+
+                    <p className="text-xs text-gray-500 mt-1">
+                      Last {provider.accountSuffixLength ?? 8} digits of the
+                      account number.
+                    </p>
                   </div>
                 )}
               </>
@@ -349,7 +354,15 @@ export default function DashboardVerifyReceiptPage() {
                     </label>
                   ) : (
                     <div className="relative">
-                      <img src={imagePreview} className="rounded-xl" />
+                      {/* Transient data-URL preview of the user's upload — not a
+                          remote asset next/image can optimize, so a plain <img>
+                          is the right tool here. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imagePreview}
+                        alt="Receipt preview"
+                        className="rounded-xl"
+                      />
                       <button
                         type="button"
                         onClick={removeImage}

@@ -160,7 +160,10 @@ export async function verifyAbyssinia(input: {
       let text = "";
 
       if (type === "pdf") {
-        let text = await extractTextFromPdf(input.fileBuffer);
+        // NB: assign the OUTER `text` — a shadowing `let text` here left the
+        // outer variable empty, so the reference was never extracted from
+        // uploaded Abyssinia PDFs.
+        text = await extractTextFromPdf(input.fileBuffer);
 
         if (!text || text.length < 100) {
           const imageBuffer = await convertPdfToImage(input.fileBuffer);

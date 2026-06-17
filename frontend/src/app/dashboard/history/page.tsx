@@ -115,7 +115,7 @@ export default function HistoryPage() {
     const q = search.toLowerCase();
     return receipts.filter((r) => {
       const matchSearch =
-        r.reference.toLowerCase().includes(q) ||
+        (r.reference ?? "").toLowerCase().includes(q) ||
         providerLabel(r.provider).toLowerCase().includes(q);
       const matchStatus = status === "all" || r.status === status;
       return matchSearch && matchStatus;
@@ -264,7 +264,7 @@ export default function HistoryPage() {
                         className="hover:bg-white/[0.015] transition-colors"
                       >
                         <td className="px-4 py-3.5 font-mono text-xs text-slate-300">
-                          {r.reference}
+                          {r.reference ?? "—"}
                         </td>
                         <td className="px-4 py-3.5 text-slate-300">
                           {providerLabel(r.provider)}
@@ -337,7 +337,7 @@ export default function HistoryPage() {
               <div>
                 <h2 className="text-base font-semibold">Receipt details</h2>
                 <p className="font-mono text-xs text-slate-500 mt-1">
-                  {detail.reference}
+                  {detail.reference ?? "—"}
                 </p>
               </div>
               <button

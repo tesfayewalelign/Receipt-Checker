@@ -10,6 +10,7 @@ export class MPesaService {
     return await verifyMPesa({
       reference: input.reference,
       fileBuffer: input.fileBuffer,
+      fileType: input.fileType,
       filePath: undefined,
     });
   }
