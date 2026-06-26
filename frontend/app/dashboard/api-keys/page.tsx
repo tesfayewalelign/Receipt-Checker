@@ -34,7 +34,8 @@ export default function ApiKeysPage() {
       try {
         setLoading(true);
 
-        const session = await authClient.getSession();
+        const { data: session } = await authClient.getSession();
+
         if (!session?.user) return;
 
         const res = await fetch("http://localhost:5000/api/keys", {

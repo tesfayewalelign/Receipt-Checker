@@ -47,7 +47,8 @@ export const REQUEST_PARAMS: Array<{
     name: "accountSuffix",
     type: "string",
     required: "Conditional",
-    description: "Last digits of the account number. Used by cbe and abyssinia.",
+    description:
+      "Last digits of the account number. Used by cbe and abyssinia.",
   },
   {
     name: "phoneNumber",
@@ -76,35 +77,107 @@ export const BANK_FIELDS: Array<{
   label: string;
   required: string;
 }> = [
-  { type: "cbe", label: "Commercial Bank of Ethiopia", required: "reference + accountSuffix (or file)" },
-  { type: "cbebirr", label: "CBE Birr", required: "reference + phoneNumber (or file)" },
+  {
+    type: "cbe",
+    label: "Commercial Bank of Ethiopia",
+    required: "reference + accountSuffix (or file)",
+  },
+  {
+    type: "cbebirr",
+    label: "CBE Birr",
+    required: "reference + phoneNumber (or file)",
+  },
   { type: "awash", label: "Awash Bank", required: "reference (or file)" },
   { type: "dashen", label: "Dashen Bank", required: "reference (or file)" },
   { type: "telebirr", label: "Telebirr", required: "reference (or file)" },
-  { type: "abyssinia", label: "Bank of Abyssinia", required: "reference + accountSuffix (or file)" },
-  { type: "mpesa", label: "M-Pesa", required: "reference or filePath (or file)" },
+  {
+    type: "abyssinia",
+    label: "Bank of Abyssinia",
+    required: "reference + accountSuffix (or file)",
+  },
+  {
+    type: "mpesa",
+    label: "M-Pesa",
+    required: "reference or filePath (or file)",
+  },
 ];
 
 // Fields returned inside `data` on a successful verification.
-export const RESPONSE_FIELDS: Array<{ name: string; type: string; description: string }> = [
+export const RESPONSE_FIELDS: Array<{
+  name: string;
+  type: string;
+  description: string;
+}> = [
   { name: "payer", type: "string | null", description: "Name of the sender." },
-  { name: "payerAccount", type: "string | null", description: "Sender account number." },
-  { name: "receiver", type: "string | null", description: "Name of the recipient." },
-  { name: "receiverAccount", type: "string | null", description: "Recipient account number." },
+  {
+    name: "payerAccount",
+    type: "string | null",
+    description: "Sender account number.",
+  },
+  {
+    name: "receiver",
+    type: "string | null",
+    description: "Name of the recipient.",
+  },
+  {
+    name: "receiverAccount",
+    type: "string | null",
+    description: "Recipient account number.",
+  },
   { name: "amount", type: "number | null", description: "Transaction amount." },
-  { name: "reference", type: "string | null", description: "Transaction reference number." },
-  { name: "reason", type: "string | null", description: "Payment reason / narrative." },
-  { name: "date", type: "string | null", description: "Transaction date/time." },
+  {
+    name: "reference",
+    type: "string | null",
+    description: "Transaction reference number.",
+  },
+  {
+    name: "reason",
+    type: "string | null",
+    description: "Payment reason / narrative.",
+  },
+  {
+    name: "date",
+    type: "string | null",
+    description: "Transaction date/time.",
+  },
 ];
 
 // Error responses. Messages match the backend verbatim.
-export const ERROR_ROWS: Array<{ status: string; message: string; when: string }> = [
-  { status: "400", message: "type is required", when: "The type field was omitted." },
-  { status: "400", message: "Unsupported receipt type", when: "type is not one of the supported providers." },
-  { status: "401", message: "API key is required", when: "The x-api-key header is missing." },
-  { status: "403", message: "Invalid API key", when: "The key does not exist." },
-  { status: "403", message: "API key is disabled", when: "The key has been revoked." },
-  { status: "500", message: "Verification failed", when: "The provider could not be reached or the receipt could not be parsed." },
+export const ERROR_ROWS: Array<{
+  status: string;
+  message: string;
+  when: string;
+}> = [
+  {
+    status: "400",
+    message: "type is required",
+    when: "The type field was omitted.",
+  },
+  {
+    status: "400",
+    message: "Unsupported receipt type",
+    when: "type is not one of the supported providers.",
+  },
+  {
+    status: "401",
+    message: "API key is required",
+    when: "The x-api-key header is missing.",
+  },
+  {
+    status: "403",
+    message: "Invalid API key",
+    when: "The key does not exist.",
+  },
+  {
+    status: "403",
+    message: "API key is disabled",
+    when: "The key has been revoked.",
+  },
+  {
+    status: "500",
+    message: "Verification failed",
+    when: "The provider could not be reached or the receipt could not be parsed.",
+  },
 ];
 
 // ---- Code samples -------------------------------------------------------
