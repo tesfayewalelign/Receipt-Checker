@@ -5,35 +5,29 @@ import { CBEVerificationService } from "../../services/cbe.service";
 import { DashenService } from "../../services/dashn.service";
 import { AbyssiniaService } from "../../services/abyssinia.service";
 import { MPesaService } from "../../services/mpessa.service";
+
 import { normalizeReceipt } from "../../../../utils/receiptNormalizer";
-import { Prisma } from "../../../../generated/prisma";
 import prisma from "../../../../config/database";
 import auth from "../../../../lib/auth";
 
 export class ReceiptService {
   static async verify(bank: string, payload: any) {
-    let rawResult;
+    let rawResult: any;
 
     switch (bank) {
       case "telebirr":
         rawResult = await TelebirrService.verify(payload);
-
         break;
 
       case "cbe-birr":
-        // The verify form labels this field "Receipt Number" and the provider
-        // config names it `receiptNumber`, but the verifier reads `reference`.
-        // Accept either so a typed receipt number isn't silently dropped.
         rawResult = await CBEBirrService.verify({
           ...payload,
           reference: payload.reference || payload.receiptNumber,
         });
-
         break;
 
       case "awash":
         rawResult = await AwashService.verify(payload);
-
         break;
 
       case "cbe":
@@ -46,22 +40,17 @@ export class ReceiptService {
 
       case "boa":
         rawResult = await AbyssiniaService.verify(payload);
-
         break;
 
       case "mpesa":
         rawResult = await MPesaService.verify(payload);
-
         break;
 
       default:
         throw new Error("Unsupported provider");
     }
 
-    // When the verifier failed, do NOT normalize (normalize maps over a
-    // missing rawResult.data, producing an all-undefined object that
-    // JSON.stringify collapses to `{}` — the mysterious `{ success:false,
-    // data:{} }`). Instead surface the real reason the verifier reported.
+    // ❗ IMPORTANT: never normalize failed results
     if (!rawResult?.success) {
       return {
         success: false,
@@ -78,6 +67,10 @@ export class ReceiptService {
     };
   }
 }
+
+/**
+ * Save receipt only if user is logged in
+ */
 export const saveReceiptIfLoggedIn = async (
   req: any,
   result: any,
@@ -87,14 +80,9 @@ export const saveReceiptIfLoggedIn = async (
     headers: new Headers(req.headers as HeadersInit),
   });
 
-  if (!session?.user?.id) {
-    return;
-  }
+  if (!session?.user?.id) return;
 
-  // result.data is null on every failed verification (see ReceiptService.verify),
-  // so read every field through optional chaining + nullish fallback. Never touch
-  // result.data.* directly — that is what threw "Cannot read properties of null".
-  const receipt = await prisma.receiptLog.create({
+  await prisma.receiptLog.create({
     data: {
       userId: session.user.id,
       reference: result.data?.reference ?? null,
