@@ -46,9 +46,7 @@ export class ReceiptService {
 
       case "boa":
         rawResult = await AbyssiniaService.verify(payload);
-        console.log("========== MPESA RAW RESULT ==========");
-        console.log(JSON.stringify(rawResult, null, 2));
-        console.log("======================================");
+
         break;
 
       case "mpesa":
@@ -59,13 +57,6 @@ export class ReceiptService {
       default:
         throw new Error("Unsupported provider");
     }
-
-    console.log("========== RAW VERIFIER RESULT ==========");
-    console.log("[ReceiptService] bank:", bank);
-    console.log("[ReceiptService] success:", rawResult?.success);
-    console.log("[ReceiptService] error:", rawResult?.error ?? "(none)");
-    console.log("[ReceiptService] has data:", !!(rawResult as any)?.data);
-    console.log("=========================================");
 
     // When the verifier failed, do NOT normalize (normalize maps over a
     // missing rawResult.data, producing an all-undefined object that
@@ -80,9 +71,6 @@ export class ReceiptService {
     }
 
     const normalized = normalizeReceipt(bank, rawResult);
-    console.log("========== NORMALIZED RESULT ==========");
-    console.log(JSON.stringify(normalized, null, 2));
-    console.log("=======================================");
 
     return {
       success: true,
@@ -100,7 +88,6 @@ export const saveReceiptIfLoggedIn = async (
   });
 
   if (!session?.user?.id) {
-    console.log("Guest user - not saving receipt");
     return;
   }
 
@@ -116,6 +103,4 @@ export const saveReceiptIfLoggedIn = async (
       provider: bank,
     },
   });
-
-  console.log("Receipt saved:", receipt.id);
 };

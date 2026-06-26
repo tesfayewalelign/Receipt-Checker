@@ -116,7 +116,6 @@ export class TelebirrVerifier {
     if (!reference) return null;
 
     const cleanedRef = normalizeReference(reference);
-    console.log(`[verifier] Verifying reference: ${cleanedRef}`);
 
     // 1️⃣  Try direct (no proxy) first
     const directHtml = await this.fetchDirect(cleanedRef);
@@ -149,7 +148,6 @@ export class TelebirrVerifier {
     for (let i = 0; i < proxyUrls.length; i++) {
       const proxyUrl = proxyUrls[i];
       const label = `proxy #${i + 1} (${proxyUrl})`;
-      console.log(`[verifier] Trying ${label} …`);
 
       const html = await this.fetchFromProxy(cleanedRef, proxyUrl);
       if (!html) {

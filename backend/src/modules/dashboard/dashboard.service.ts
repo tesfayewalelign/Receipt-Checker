@@ -21,10 +21,13 @@ export class DashboardService {
     });
 
     const total = receipts.length;
-    const success = receipts.filter((r) => r.status === "verified").length;
+    const success = receipts.filter((r: any) => r.status === "verified").length;
     const failed = total - success;
 
-    const totalAmount = receipts.reduce((sum, r) => sum + (r.amount || 0), 0);
+    const totalAmount = receipts.reduce(
+      (sum: number, r: any) => sum + (r.amount || 0),
+      0,
+    );
 
     return {
       total,

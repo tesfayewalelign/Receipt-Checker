@@ -14,10 +14,7 @@ export const apiKeyMiddleware = async (
   next: NextFunction,
 ) => {
   try {
-    console.log("🔥 Middleware hit");
-
     const apiKey = req.header("x-api-key");
-    console.log("API KEY:", apiKey);
 
     if (!apiKey) {
       return res.status(401).json({

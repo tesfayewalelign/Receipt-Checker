@@ -51,11 +51,8 @@ function parseCBEDate(dateText: string): Date {
 async function extractReferenceFromUploadedPdf(
   buffer: Buffer,
 ): Promise<string> {
-  console.log("[CBE/pdf] buffer received:", !!buffer, "bytes:", buffer?.length ?? 0);
-
   const uint8Array = new Uint8Array(buffer);
   const pdf = await pdfjs.getDocument({ data: uint8Array }).promise;
-  console.log("[CBE/pdf] pdfjs loaded, numPages:", pdf.numPages);
 
   let text = "";
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -65,8 +62,6 @@ async function extractReferenceFromUploadedPdf(
   }
 
   const normalized = text.replace(/\s+/g, " ").trim();
-  console.log("[CBE/pdf] extracted text length:", normalized.length);
-  console.log("[CBE/pdf] text preview:", normalized.slice(0, 300));
 
   // pdfjs returns no text for scanned/image-only PDFs — distinguish that from
   // a PDF whose text simply doesn't match our reference pattern.
@@ -79,8 +74,6 @@ async function extractReferenceFromUploadedPdf(
   const reference = normalized.match(
     /Reference\s+No\.?\s*\(VAT\s+Invoice\s+No\)\s+([A-Z0-9]+)/i,
   )?.[1];
-
-  console.log("[CBE/pdf] extracted reference:", reference ?? "(none — regex did not match)");
 
   if (!reference) {
     throw new Error("No receipt reference found in uploaded PDF");
@@ -105,7 +98,6 @@ export async function extractReferenceFromImage(
   await worker.terminate();
 
   const text = data.text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-  console.log("OCR TEXT:", text);
 
   const matches = text.match(/\bFT[A-Z0-9]{8,}\b/g);
   if (!matches || matches.length === 0) {
