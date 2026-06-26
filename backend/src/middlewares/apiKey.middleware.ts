@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import prisma from "../config/database";
 
-export interface AuthenticatedRequest extends Request {
-  user?: Awaited<ReturnType<typeof prisma.user.findUnique>>;
+type User = NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>;
 
-  apiKey?: Awaited<ReturnType<typeof prisma.apiKey.findUnique>>;
+type ApiKey = NonNullable<Awaited<ReturnType<typeof prisma.apiKey.findUnique>>>;
+
+export interface AuthenticatedRequest extends Request {
+  user?: User;
+  apiKey?: ApiKey;
 }
+
 export const apiKeyMiddleware = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -37,6 +41,13 @@ export const apiKeyMiddleware = async (
       return res.status(403).json({
         success: false,
         message: "API key is disabled",
+      });
+    }
+
+    if (!keyRecord.user) {
+      return res.status(500).json({
+        success: false,
+        message: "User not linked to API key",
       });
     }
 
